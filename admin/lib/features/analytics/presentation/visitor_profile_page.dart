@@ -9,6 +9,7 @@ import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
 import '../application/visitor_profile_controller.dart';
+import 'visitor_visuals.dart';
 
 class VisitorProfilePage extends ConsumerWidget {
   const VisitorProfilePage({
@@ -610,17 +611,50 @@ class _VisitCard extends StatelessWidget {
                 else
                   _InfoChip(text: context.tr('New visit', '新访客')),
                 if (visit.bounce) _InfoChip(text: context.tr('Bounce', '跳出')),
-                if (visit.browser != null) _InfoChip(text: visit.browser!),
+                if (visit.browser != null)
+                  _InfoChip(
+                    text: visit.browser!,
+                    leading: VisitorPlatformMark(
+                      kind: VisitorPlatformKind.browser,
+                      value: visit.browser!,
+                      size: 17,
+                    ),
+                  ),
                 if (visit.operatingSystem != null)
-                  _InfoChip(text: visit.operatingSystem!),
+                  _InfoChip(
+                    text: visit.operatingSystem!,
+                    leading: VisitorPlatformMark(
+                      kind: VisitorPlatformKind.operatingSystem,
+                      value: visit.operatingSystem!,
+                      size: 17,
+                    ),
+                  ),
                 if (visit.deviceType != null)
-                  _InfoChip(text: visit.deviceType!),
+                  _InfoChip(
+                    text: visit.deviceType!,
+                    leading: VisitorPlatformMark(
+                      kind: VisitorPlatformKind.device,
+                      value: visit.deviceType!,
+                      size: 17,
+                    ),
+                  ),
                 if (visit.language != null) _InfoChip(text: visit.language!),
-                if (location.isNotEmpty) _InfoChip(text: location),
-                if (visit.referrerHost != null)
+                if (location.isNotEmpty)
+                  _InfoChip(
+                    text: location,
+                    leading: CountryFlag(
+                      countryCode: visit.countryCode,
+                      size: 17,
+                    ),
+                  ),
+                if (visit.referrerHost?.isNotEmpty == true)
                   _InfoChip(
                     text:
                         '${context.tr('Referrer', '来源')}: ${visit.referrerHost}',
+                    leading: ReferrerFavicon(
+                      host: visit.referrerHost!,
+                      size: 17,
+                    ),
                   ),
                 if (campaign.isNotEmpty)
                   _InfoChip(text: '${context.tr('Campaign', '活动')}: $campaign'),
@@ -667,12 +701,14 @@ class _ActionTile extends StatelessWidget {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.text});
+  const _InfoChip({required this.text, this.leading});
 
   final String text;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) => Chip(
+    avatar: leading,
     label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
     visualDensity: VisualDensity.compact,
     padding: EdgeInsets.zero,

@@ -10,11 +10,15 @@ class WorldMapChart extends StatefulWidget {
   const WorldMapChart({
     required this.sessionsByCountry,
     required this.onCountrySelected,
+    this.visitorsByCountry = const {},
+    this.countryLabels = const {},
     this.selectedCountryCode,
     super.key,
   });
 
   final Map<String, int> sessionsByCountry;
+  final Map<String, int> visitorsByCountry;
+  final Map<String, String> countryLabels;
   final ValueChanged<String> onCountrySelected;
   final String? selectedCountryCode;
 
@@ -90,19 +94,37 @@ class _WorldMapChartState extends State<WorldMapChart> {
               },
               child: Semantics(
                 label: context.tr(
-                  'Interactive world map. Tap a shaded country for visits.',
-                  '可交互世界地图。点击有数据的国家查看访问量。',
+                  'Interactive world map. Hover or tap a shaded country for visits.',
+                  '可交互世界地图。悬停或点击有数据的国家查看访问量。',
                 ),
                 child: SizedBox.fromSize(
                   size: size,
-                  child: CustomPaint(
-                    painter: _WorldMapPainter(
-                      paths: paths,
-                      sessionsByCountry: widget.sessionsByCountry,
-                      maxSessions: maxSessions,
-                      selectedCountryCode: widget.selectedCountryCode,
-                      hoveredCountryCode: _hoveredCountryCode,
-                    ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CustomPaint(
+                        painter: _WorldMapPainter(
+                          paths: paths,
+                          sessionsByCountry: widget.sessionsByCountry,
+                          maxSessions: maxSessions,
+                          selectedCountryCode: widget.selectedCountryCode,
+                          hoveredCountryCode: _hoveredCountryCode,
+                        ),
+                      ),
+                      if (_hoveredCountryCode case final code?)
+                        Positioned(
+                          left: 10,
+                          top: 10,
+                          child: IgnorePointer(
+                            child: _MapTooltip(
+                              code: code,
+                              label: widget.countryLabels[code] ?? code,
+                              sessions: widget.sessionsByCountry[code] ?? 0,
+                              visitors: widget.visitorsByCountry[code] ?? 0,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -130,6 +152,57 @@ class _WorldMapChartState extends State<WorldMapChart> {
     _cachedPaths = paths;
     return paths;
   }
+}
+
+class _MapTooltip extends StatelessWidget {
+  const _MapTooltip({
+    required this.code,
+    required this.label,
+    required this.sessions,
+    required this.visitors,
+  });
+
+  final String code;
+  final String label;
+  final int sessions;
+  final int visitors;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: const Color(0xee18364f),
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x26000000),
+          blurRadius: 12,
+          offset: Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label · $code',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${sessions.toString()} ${context.tr('visits', '次访问')}  ·  ${visitors.toString()} ${context.tr('visitors', '位访客')}',
+            style: const TextStyle(color: Color(0xffd7e6f3), fontSize: 11),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _CountryShape {
@@ -239,7 +312,12 @@ class _WorldMapPainter extends CustomPainter {
       final code = countryPath.country.code;
       final path = countryPath.path;
       final sessions = sessionsByCountry[code] ?? 0;
-      fill.color = _countryColor(sessions);
+      final baseColor = _countryColor(sessions);
+      fill.color = code == selectedCountryCode
+          ? Color.lerp(baseColor, _selected.withValues(alpha: .55), .55)!
+          : code == hoveredCountryCode
+          ? Color.lerp(baseColor, _high.withValues(alpha: .5), .42)!
+          : baseColor;
       canvas.drawPath(path, fill);
       canvas.drawPath(path, stroke);
       if (code == selectedCountryCode || code == hoveredCountryCode) {
@@ -247,10 +325,10 @@ class _WorldMapPainter extends CustomPainter {
           path,
           Paint()
             ..style = PaintingStyle.stroke
-            ..strokeWidth = code == selectedCountryCode ? 1.8 : 1.2
+            ..strokeWidth = code == selectedCountryCode ? 1.8 : 1.45
             ..color = code == selectedCountryCode
                 ? _selected
-                : const Color(0xff344e67)
+                : const Color(0xff315e87)
             ..isAntiAlias = true,
         );
       }

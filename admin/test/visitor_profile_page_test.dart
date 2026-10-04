@@ -5,10 +5,17 @@ import 'package:go_router/go_router.dart';
 import 'package:seeray_lens_admin/core/network/seeray_api.dart';
 import 'package:seeray_lens_admin/features/analytics/presentation/visitor_log_panel.dart';
 import 'package:seeray_lens_admin/features/analytics/presentation/visitor_profile_page.dart';
+import 'package:seeray_lens_admin/features/analytics/presentation/visitor_visuals.dart';
 import 'package:seeray_lens_admin/features/auth/application/auth_controller.dart';
 
 void main() {
   testWidgets('opens a visitor profile from recent visits', (tester) async {
+    ReferrerFaviconCache.fetcherOverrideForTest = (_) async => null;
+    ReferrerFaviconCache.clearForTest();
+    addTearDown(() {
+      ReferrerFaviconCache.fetcherOverrideForTest = null;
+      ReferrerFaviconCache.clearForTest();
+    });
     tester.view.physicalSize = const Size(1280, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -61,6 +68,10 @@ void main() {
     expect(find.text('2'), findsWidgets);
     expect(find.textContaining('/pricing'), findsWidgets);
     expect(find.text('Chrome'), findsOneWidget);
+    expect(find.byTooltip('Chrome'), findsOneWidget);
+    expect(find.byTooltip('Linux'), findsOneWidget);
+    expect(find.byTooltip('desktop'), findsOneWidget);
+    expect(find.byType(CountryFlag), findsOneWidget);
     expect(find.textContaining('product_interaction'), findsOneWidget);
     expect(api.profilePath, contains('/visitors/visitor-123456'));
     await tester.ensureVisible(find.text('Load older visits'));

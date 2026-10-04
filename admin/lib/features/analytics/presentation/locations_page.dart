@@ -7,6 +7,7 @@ import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_controller.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
+import 'visitor_visuals.dart';
 import 'world_map_chart.dart';
 
 class LocationsPage extends ConsumerWidget {
@@ -207,7 +208,10 @@ class _LocationReportState extends State<_LocationReport> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.location_on_outlined, size: 18),
+                          CountryFlag(
+                            countryCode: selectedCountry.countryCode,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -229,6 +233,14 @@ class _LocationReportState extends State<_LocationReport> {
                       sessionsByCountry: {
                         for (final country in countries)
                           country.countryCode!: country.sessions,
+                      },
+                      visitorsByCountry: {
+                        for (final country in countries)
+                          country.countryCode!: country.visitors,
+                      },
+                      countryLabels: {
+                        for (final country in countries)
+                          country.countryCode!: country.label,
                       },
                       selectedCountryCode: _selectedCountryCode,
                       onCountrySelected: (code) =>
@@ -300,7 +312,11 @@ class _LocationReportState extends State<_LocationReport> {
                             () => _selectedCountryCode = row.countryCode,
                           )
                         : null,
-                    child: _LocationRow(row: row, totalSessions: total),
+                    child: _LocationRow(
+                      row: row,
+                      totalSessions: total,
+                      showFlag: _level == 'country',
+                    ),
                   ),
               ],
             ),
@@ -318,10 +334,15 @@ class _LocationReportState extends State<_LocationReport> {
 }
 
 class _LocationRow extends StatelessWidget {
-  const _LocationRow({required this.row, required this.totalSessions});
+  const _LocationRow({
+    required this.row,
+    required this.totalSessions,
+    required this.showFlag,
+  });
 
   final AnalyticsLocation row;
   final int totalSessions;
+  final bool showFlag;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -330,6 +351,10 @@ class _LocationRow extends StatelessWidget {
       children: [
         Row(
           children: [
+            if (showFlag) ...[
+              CountryFlag(countryCode: row.countryCode, size: 18),
+              const SizedBox(width: 9),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

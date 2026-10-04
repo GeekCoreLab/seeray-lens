@@ -5,22 +5,18 @@ import io.quarkus.security.identity.*;
 import io.quarkus.security.identity.request.TokenAuthenticationRequest;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.seeray.lens.application.ApiTokenAuthenticator;
-import io.seeray.lens.application.JwtService;
-import io.seeray.lens.domain.common.ControlPlaneException;
-import io.seeray.lens.domain.auth.AppUser;
-import io.seeray.lens.domain.auth.UserStatus;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.security.Principal;
 
 @ApplicationScoped
 public class JwtIdentityProvider implements IdentityProvider<TokenAuthenticationRequest> {
-    private final JwtService jwt;
     private final ApiTokenAuthenticator apiTokens;
+    private final JwtIdentityFactory jwtIdentityFactory;
 
-    public JwtIdentityProvider(JwtService jwt, ApiTokenAuthenticator apiTokens) {
-        this.jwt = jwt;
+    public JwtIdentityProvider(ApiTokenAuthenticator apiTokens, JwtIdentityFactory jwtIdentityFactory) {
         this.apiTokens = apiTokens;
+        this.jwtIdentityFactory = jwtIdentityFactory;
     }
 
     @Override
@@ -49,16 +45,7 @@ public class JwtIdentityProvider implements IdentityProvider<TokenAuthentication
             });
         }
         return context.runBlocking(() -> {
-            JwtService.Claims claims = jwt.verifyClaims(value);
-            AppUser user = AppUser.findById(claims.userId());
-            if (user == null || user.status == UserStatus.DISABLED || user.authVersion != claims.authVersion())
-                throw new ControlPlaneException(401, "INVALID_ACCESS_TOKEN", "Access token is invalid or revoked");
-            return QuarkusSecurityIdentity.builder()
-                    .setPrincipal((Principal) () -> user.id.toString())
-                    .addCredential(credential)
-                    .addAttribute("systemAdmin", user.systemAdmin)
-                    .addAttribute("mustChangePassword", user.mustChangePassword)
-                    .build();
+            return jwtIdentityFactory.authenticate(value, credential);
         });
     }
 }

@@ -7,6 +7,7 @@ import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_controller.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
+import 'visitor_visuals.dart';
 
 class TechnologyPage extends ConsumerWidget {
   const TechnologyPage({
@@ -173,6 +174,12 @@ class _TechnologyCard extends StatelessWidget {
       'Viewport size' => context.tr('Viewport sizes', '视口尺寸'),
       _ => context.tr('Display scale', '显示缩放'),
     };
+    final markKind = switch (dimension) {
+      'Browser' || 'Browser version' => VisitorPlatformKind.browser,
+      'Operating system' || 'OS version' => VisitorPlatformKind.operatingSystem,
+      'Device type' => VisitorPlatformKind.device,
+      _ => null,
+    };
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -194,6 +201,14 @@ class _TechnologyCard extends StatelessWidget {
             for (final row in rows.take(8)) ...[
               Row(
                 children: [
+                  if (markKind != null) ...[
+                    VisitorPlatformMark(
+                      kind: markKind,
+                      value: row.value,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: Text(row.value, overflow: TextOverflow.ellipsis),
                   ),

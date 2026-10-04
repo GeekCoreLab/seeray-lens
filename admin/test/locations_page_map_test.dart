@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seeray_lens_admin/core/network/seeray_api.dart';
 import 'package:seeray_lens_admin/features/analytics/presentation/locations_page.dart';
+import 'package:seeray_lens_admin/features/analytics/presentation/visitor_visuals.dart';
 import 'package:seeray_lens_admin/features/auth/application/auth_controller.dart';
 
 void main() {
@@ -31,6 +32,7 @@ void main() {
 
     expect(find.text('United States · US'), findsOneWidget);
     expect(find.text('14 visits · 9 visitors'), findsOneWidget);
+    expect(find.byType(CountryFlag), findsWidgets);
   });
 }
 

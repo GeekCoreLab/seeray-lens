@@ -21,6 +21,7 @@ import '../application/analytics_segment.dart';
 import '../application/custom_report_formula.dart';
 import '../application/realtime_controller.dart';
 import '../application/saved_dashboard_controller.dart';
+import 'visitor_visuals.dart';
 
 class AnalyticsDashboardPage extends ConsumerStatefulWidget {
   const AnalyticsDashboardPage({
@@ -3240,14 +3241,27 @@ class _DashboardWidgetContent extends ConsumerWidget {
                       label: context.tr('No technology data yet', '暂无技术数据'),
                     )
                   : Column(
-                      children: filtered
-                          .map(
-                            (row) => _TableRow(
-                              label: row.value,
-                              value: '${row.sessions}',
-                            ),
-                          )
-                          .toList(),
+                      children: filtered.map((row) {
+                        final kind = switch (row.dimension.toLowerCase()) {
+                          'browser' ||
+                          'browser version' => VisitorPlatformKind.browser,
+                          'operating system' ||
+                          'os version' => VisitorPlatformKind.operatingSystem,
+                          'device type' => VisitorPlatformKind.device,
+                          _ => null,
+                        };
+                        return _TableRow(
+                          label: row.value,
+                          value: '${row.sessions}',
+                          leading: kind == null
+                              ? null
+                              : VisitorPlatformMark(
+                                  kind: kind,
+                                  value: row.value,
+                                  size: 19,
+                                ),
+                        );
+                      }).toList(),
                     ),
             );
           },
@@ -3302,6 +3316,12 @@ class _DashboardWidgetContent extends ConsumerWidget {
                             (row) => _TableRow(
                               label: row.label,
                               value: '${row.sessions}',
+                              leading: item.locationLevel == 'country'
+                                  ? CountryFlag(
+                                      countryCode: row.countryCode,
+                                      size: 17,
+                                    )
+                                  : null,
                             ),
                           )
                           .toList(),
@@ -3901,6 +3921,10 @@ class _LiveDashboardWidgetState extends ConsumerState<_LiveDashboardWidget> {
                       label: '${visitor.countryCode ?? '—'} · $page',
                       value:
                           '${visitor.pageViews} ${context.tr('views', '次浏览')}',
+                      leading: CountryFlag(
+                        countryCode: visitor.countryCode,
+                        size: 17,
+                      ),
                     );
                   }).toList(),
                 ),
@@ -4119,14 +4143,16 @@ Future<void> _saveAnalyticsExport(
 }
 
 class _TableRow extends StatelessWidget {
-  const _TableRow({required this.label, required this.value});
+  const _TableRow({required this.label, required this.value, this.leading});
   final String label;
   final String value;
+  final Widget? leading;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(
       children: [
+        if (leading != null) ...[leading!, const SizedBox(width: 8)],
         Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
         Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
       ],
