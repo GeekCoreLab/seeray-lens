@@ -119,14 +119,17 @@ public class TrackingResource {
                         .await()
                         .atMost(java.time.Duration.ofSeconds(5));
             } catch (Exception e) {
-                LOG.warnf("Tracking publish failed (exceptionType=%s)", e.getClass().getSimpleName());
+                LOG.warnf(
+                        "Tracking publish failed (exceptionType=%s)",
+                        e.getClass().getSimpleName());
                 throw new WebApplicationException(Response.status(503)
                         .header("Retry-After", "5")
-                        .entity(Map.of(
-                                "code",
-                                "TRACKING_INGESTION_UNCONFIRMED",
-                                "message",
-                                "The server could not confirm that the tracking event was accepted. Retry after 5 seconds."))
+                        .entity(
+                                Map.of(
+                                        "code",
+                                        "TRACKING_INGESTION_UNCONFIRMED",
+                                        "message",
+                                        "The server could not confirm that the tracking event was accepted. Retry after 5 seconds."))
                         .build());
             }
         }
