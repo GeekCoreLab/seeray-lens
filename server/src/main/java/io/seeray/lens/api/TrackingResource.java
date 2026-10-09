@@ -17,11 +17,13 @@ import java.time.Instant;
 import java.util.*;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Message;
+import org.jboss.logging.Logger;
 
 @Path("/api/v1/collect")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class TrackingResource {
+    private static final Logger LOG = Logger.getLogger(TrackingResource.class);
     private final ObjectMapper mapper;
     private final SiteService sites;
     private final MutinyEmitter<String> publisher;
@@ -117,9 +119,14 @@ public class TrackingResource {
                         .await()
                         .atMost(java.time.Duration.ofSeconds(5));
             } catch (Exception e) {
+                LOG.warnf("Tracking publish failed (exceptionType=%s)", e.getClass().getSimpleName());
                 throw new WebApplicationException(Response.status(503)
                         .header("Retry-After", "5")
-                        .entity(Map.of("code", "INGESTION_UNAVAILABLE", "message", "Tracking temporarily unavailable"))
+                        .entity(Map.of(
+                                "code",
+                                "TRACKING_INGESTION_UNCONFIRMED",
+                                "message",
+                                "The server could not confirm that the tracking event was accepted. Retry after 5 seconds."))
                         .build());
             }
         }
