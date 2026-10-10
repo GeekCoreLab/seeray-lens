@@ -103,8 +103,17 @@ class SitesController extends AsyncNotifier<List<Site>> {
     return updated;
   }
 
-  Future<void> delete(String siteId) async {
-    await ref.read(apiProvider).request('DELETE', '/api/v1/sites/$siteId');
+  Future<void> delete(String siteId, {String? confirmTrackingId}) async {
+    final isSystemAdmin = ref.read(authProvider).isSystemAdmin;
+    await ref
+        .read(apiProvider)
+        .request(
+          'DELETE',
+          isSystemAdmin
+              ? '/api/v1/admin/sites/$siteId'
+              : '/api/v1/sites/$siteId',
+          body: isSystemAdmin ? {'confirmTrackingId': confirmTrackingId} : null,
+        );
     state = AsyncData(
       (state.value ?? const <Site>[])
           .where((site) => site.id != siteId)

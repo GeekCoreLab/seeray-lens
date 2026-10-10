@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../application/site_controller.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../../shared/presentation/timezone_picker.dart';
 import '../../../core/i18n/app_i18n.dart';
 import '../../../shared/presentation/app_back_button.dart';
@@ -93,6 +94,78 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
     } finally {
       if (mounted) {
         setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _deleteSite(Site site) async {
+    final isSystemAdmin = ref.read(authProvider).isSystemAdmin;
+    final confirm = TextEditingController();
+    final confirmation = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(context.tr('Delete site?', '删除站点？')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.tr(
+                  'This permanently removes the site and its analytics data.',
+                  '此操作会永久删除站点及其分析数据。',
+                ),
+              ),
+              if (isSystemAdmin) ...[
+                const SizedBox(height: 12),
+                Text(
+                  context.tr(
+                    'Enter the tracking ID to confirm.',
+                    '请输入追踪 ID 确认。',
+                  ),
+                ),
+                SelectableText(site.trackingId),
+                TextField(
+                  controller: confirm,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: context.tr('Tracking ID', '追踪 ID'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(context.tr('Cancel', '取消')),
+            ),
+            FilledButton(
+              onPressed: isSystemAdmin && confirm.text.trim() != site.trackingId
+                  ? null
+                  : () => Navigator.pop(
+                      dialogContext,
+                      isSystemAdmin ? confirm.text.trim() : '',
+                    ),
+              child: Text(context.tr('Delete permanently', '永久删除')),
+            ),
+          ],
+        ),
+      ),
+    );
+    confirm.dispose();
+    if (confirmation == null) return;
+
+    try {
+      await ref
+          .read(sitesProvider.notifier)
+          .delete(site.id, confirmTrackingId: confirmation);
+      if (mounted) context.go('/sites');
+    } on Exception catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
       }
     }
   }
@@ -294,10 +367,7 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
                 label: Text(context.tr('Tracking integration', '追踪集成')),
               ),
               TextButton(
-                onPressed: () async {
-                  await ref.read(sitesProvider.notifier).delete(site.id);
-                  if (context.mounted) context.go('/sites');
-                },
+                onPressed: () => _deleteSite(site),
                 child: Text(context.tr('Delete site', '删除站点')),
               ),
             ],
