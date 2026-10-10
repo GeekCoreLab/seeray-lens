@@ -2,6 +2,7 @@ package io.seeray.lens.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import io.seeray.lens.domain.common.ControlPlaneException;
 import java.net.IDN;
 import java.net.URI;
@@ -180,6 +181,7 @@ public final class TrackingSanitizer {
         return false;
     }
 
+    @RegisterForReflection
     public record CleanUrl(
             String scheme,
             String host,

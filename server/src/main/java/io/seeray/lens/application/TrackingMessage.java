@@ -1,8 +1,10 @@
 package io.seeray.lens.application;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.time.Instant;
 import java.util.UUID;
 
+@RegisterForReflection
 public record TrackingMessage(
         int messageSchemaVersion,
         UUID ingestId,
