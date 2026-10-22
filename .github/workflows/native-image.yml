@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE_NAME: ghcr.io/skyhhjmk/seeray-lens
+  IMAGE_NAME: ghcr.io/geekcorelab/seeray-lens
 
 jobs:
   build-and-publish:
