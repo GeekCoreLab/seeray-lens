@@ -19,6 +19,7 @@ class AnalyticsVisitorLogEntry {
     required this.fingerprintRelatedVisitorCount,
     required this.fingerprintRelatedAccountCount,
     required this.fingerprintConfidence,
+    required this.fingerprintEvidenceTypes,
   });
 
   final String visitorId;
@@ -35,6 +36,7 @@ class AnalyticsVisitorLogEntry {
   final int fingerprintRelatedVisitorCount;
   final int fingerprintRelatedAccountCount;
   final String fingerprintConfidence;
+  final List<String> fingerprintEvidenceTypes;
 
   factory AnalyticsVisitorLogEntry.fromJson(
     Map<String, dynamic> json,
@@ -55,6 +57,10 @@ class AnalyticsVisitorLogEntry {
     fingerprintRelatedAccountCount:
         (json['fingerprintRelatedAccountCount'] as num?)?.toInt() ?? 0,
     fingerprintConfidence: json['fingerprintConfidence'] as String? ?? 'none',
+    fingerprintEvidenceTypes:
+        (json['fingerprintEvidenceTypes'] as List? ?? const [])
+            .whereType<String>()
+            .toList(growable: false),
   );
 }
 
@@ -135,6 +141,7 @@ class AnalyticsVisitorProfile {
     required this.fingerprintRelatedVisitorCount,
     required this.fingerprintRelatedAccountCount,
     required this.fingerprintConfidence,
+    required this.fingerprintEvidenceTypes,
   });
 
   final String visitorId;
@@ -158,6 +165,7 @@ class AnalyticsVisitorProfile {
   final int fingerprintRelatedVisitorCount;
   final int fingerprintRelatedAccountCount;
   final String fingerprintConfidence;
+  final List<String> fingerprintEvidenceTypes;
 
   factory AnalyticsVisitorProfile.fromJson(
     Map<String, dynamic> json,
@@ -200,6 +208,10 @@ class AnalyticsVisitorProfile {
     fingerprintRelatedAccountCount:
         (json['fingerprintRelatedAccountCount'] as num?)?.toInt() ?? 0,
     fingerprintConfidence: json['fingerprintConfidence'] as String? ?? 'none',
+    fingerprintEvidenceTypes:
+        (json['fingerprintEvidenceTypes'] as List? ?? const [])
+            .whereType<String>()
+            .toList(growable: false),
   );
 }
 

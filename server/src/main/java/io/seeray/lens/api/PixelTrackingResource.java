@@ -6,6 +6,7 @@ import io.seeray.lens.domain.common.UuidV7;
 import io.seeray.lens.domain.site.*;
 import io.seeray.lens.infrastructure.ingestion.TrackingRateLimiter;
 import io.smallrye.reactive.messaging.MutinyEmitter;
+import io.vertx.core.http.HttpServerRequest;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import java.time.Duration;
@@ -23,16 +24,19 @@ public class PixelTrackingResource {
     private final SiteService sites;
     private final MutinyEmitter<String> publisher;
     private final TrackingRateLimiter rateLimiter;
+    private final Ja4FingerprintResolver ja4FingerprintResolver;
 
     public PixelTrackingResource(
             ObjectMapper mapper,
             SiteService sites,
             @Channel("tracking-out") MutinyEmitter<String> publisher,
-            TrackingRateLimiter rateLimiter) {
+            TrackingRateLimiter rateLimiter,
+            Ja4FingerprintResolver ja4FingerprintResolver) {
         this.mapper = mapper;
         this.sites = sites;
         this.publisher = publisher;
         this.rateLimiter = rateLimiter;
+        this.ja4FingerprintResolver = ja4FingerprintResolver;
     }
 
     @GET
@@ -41,8 +45,9 @@ public class PixelTrackingResource {
     public Response gif(
             @PathParam("trackingId") String trackingId,
             @HeaderParam("Referer") String referer,
-            @Context HttpHeaders headers) {
-        track(trackingId, referer, headers);
+            @Context HttpHeaders headers,
+            @Context HttpServerRequest request) {
+        track(trackingId, referer, headers, request);
         return pixel(GIF, "image/gif", trackingId, headers);
     }
 
@@ -52,12 +57,13 @@ public class PixelTrackingResource {
     public Response svg(
             @PathParam("trackingId") String trackingId,
             @HeaderParam("Referer") String referer,
-            @Context HttpHeaders headers) {
-        track(trackingId, referer, headers);
+            @Context HttpHeaders headers,
+            @Context HttpServerRequest request) {
+        track(trackingId, referer, headers, request);
         return pixel(SVG, "image/svg+xml", trackingId, headers);
     }
 
-    private void track(String trackingId, String referer, HttpHeaders headers) {
+    private void track(String trackingId, String referer, HttpHeaders headers, HttpServerRequest request) {
         try {
             if (!rateLimiter.allow(trackingId)) return;
             Site site = Site.find("trackingId", trackingId).firstResult();
@@ -92,7 +98,10 @@ public class PixelTrackingResource {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    site.fingerprintRiskEnabled && !site.requireConsent
+                            ? ja4FingerprintResolver.hash(site.id, request)
+                            : null);
             publisher
                     .sendMessage(Message.of(mapper.writeValueAsString(message)))
                     .await()

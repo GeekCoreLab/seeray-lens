@@ -22,4 +22,5 @@ public record TrackingMessage(
         String userIdHash,
         String fingerprintKey,
         Integer fingerprintAlgorithmVersion,
-        String fingerprintStability) {}
+        String fingerprintStability,
+        String ja4FingerprintKey) {}

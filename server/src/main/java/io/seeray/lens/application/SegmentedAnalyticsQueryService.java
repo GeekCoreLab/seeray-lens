@@ -22,8 +22,8 @@ public class SegmentedAnalyticsQueryService {
     private final FingerprintRiskService fingerprintRisk;
 
     @Inject
-    public SegmentedAnalyticsQueryService(DataSource dataSource, SiteService sites, SegmentService segments,
-                                         FingerprintRiskService fingerprintRisk) {
+    public SegmentedAnalyticsQueryService(
+            DataSource dataSource, SiteService sites, SegmentService segments, FingerprintRiskService fingerprintRisk) {
         this.dataSource = dataSource;
         this.sites = sites;
         this.segments = segments;
@@ -739,7 +739,8 @@ public class SegmentedAnalyticsQueryService {
                 risk.relatedVisitorCount(),
                 risk.relatedAccountCount(),
                 risk.lastObservedAt(),
-                risk.confidence());
+                risk.confidence(),
+                risk.evidenceTypes());
     }
 
     public AnalyticsQueryService.VisitorProfileHistoryPage visitorProfileHistory(

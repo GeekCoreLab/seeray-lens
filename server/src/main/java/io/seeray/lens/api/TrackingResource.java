@@ -29,6 +29,7 @@ public class TrackingResource {
     private final MutinyEmitter<String> publisher;
     private final TrackingRateLimiter rateLimiter;
     private final GeoLocationResolver geoLocationResolver;
+    private final Ja4FingerprintResolver ja4FingerprintResolver;
     private final CrashSourceMapService crashSourceMaps;
 
     public TrackingResource(
@@ -37,12 +38,14 @@ public class TrackingResource {
             @Channel("tracking-out") MutinyEmitter<String> publisher,
             TrackingRateLimiter rateLimiter,
             GeoLocationResolver geoLocationResolver,
+            Ja4FingerprintResolver ja4FingerprintResolver,
             CrashSourceMapService crashSourceMaps) {
         this.mapper = mapper;
         this.sites = sites;
         this.publisher = publisher;
         this.rateLimiter = rateLimiter;
         this.geoLocationResolver = geoLocationResolver;
+        this.ja4FingerprintResolver = ja4FingerprintResolver;
         this.crashSourceMaps = crashSourceMaps;
     }
 
@@ -112,7 +115,10 @@ public class TrackingResource {
                             : event.fingerprint().algorithmVersion(),
                     clientError || !site.fingerprintRiskEnabled || event.fingerprint() == null
                             ? null
-                            : event.fingerprint().stability());
+                            : event.fingerprint().stability(),
+                    clientError || !site.fingerprintRiskEnabled || site.requireConsent && event.fingerprint() == null
+                            ? null
+                            : ja4FingerprintResolver.hash(site.id, httpRequest));
             try {
                 publisher
                         .sendMessage(Message.of(mapper.writeValueAsString(message)))

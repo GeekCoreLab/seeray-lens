@@ -66,32 +66,71 @@ public class IngestionPersistence {
                 }
                 statement.executeBatch();
             }
-            if (events.stream().anyMatch(event -> event.fingerprintKey() != null
-                    && event.visitorId() != null && event.sessionId() != null)) try (var statement = connection.prepareStatement(
-                    """
+            if (events.stream()
+                    .anyMatch(event -> (event.fingerprintKey() != null || event.ja4FingerprintKey() != null)
+                            && event.visitorId() != null
+                            && event.sessionId() != null))
+                try (var statement = connection.prepareStatement(
+                        """
                     INSERT INTO fingerprint_observation
-                      (id, site_id, client_visitor_id, client_session_id, fingerprint_key,
+                      (id, site_id, client_visitor_id, client_session_id, fingerprint_type, fingerprint_key,
                        algorithm_version, signal_stability, user_id_hash, observed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (id) DO NOTHING
                     """)) {
-                for (TrackingMessage event : events) {
-                    if (event.fingerprintKey() == null || event.visitorId() == null || event.sessionId() == null) continue;
-                    statement.setObject(1, event.ingestId());
-                    statement.setObject(2, event.siteId());
-                    statement.setString(3, event.visitorId());
-                    statement.setString(4, event.sessionId());
-                    statement.setString(5, event.fingerprintKey());
-                    statement.setInt(6, event.fingerprintAlgorithmVersion() == null ? 1 : event.fingerprintAlgorithmVersion());
-                    statement.setString(7, event.fingerprintStability() == null ? "low" : event.fingerprintStability());
-                    statement.setString(8, event.userIdHash());
-                    statement.setTimestamp(9, java.sql.Timestamp.from(event.receivedAt()));
-                    statement.addBatch();
+                    for (TrackingMessage event : events) {
+                        if (event.visitorId() == null || event.sessionId() == null) continue;
+                        if (event.fingerprintKey() != null) {
+                            bindFingerprint(
+                                    statement,
+                                    event,
+                                    event.ingestId(),
+                                    "browser",
+                                    event.fingerprintKey(),
+                                    event.fingerprintAlgorithmVersion() == null
+                                            ? 1
+                                            : event.fingerprintAlgorithmVersion(),
+                                    event.fingerprintStability() == null ? "low" : event.fingerprintStability());
+                            statement.addBatch();
+                        }
+                        if (event.ja4FingerprintKey() != null) {
+                            bindFingerprint(
+                                    statement,
+                                    event,
+                                    java.util.UUID.nameUUIDFromBytes((event.ingestId() + ":ja4")
+                                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                                    "ja4",
+                                    event.ja4FingerprintKey(),
+                                    1,
+                                    "low");
+                            statement.addBatch();
+                        }
+                    }
+                    statement.executeBatch();
                 }
-                statement.executeBatch();
-            }
         });
         extensionDeliveries.enqueue(events);
+    }
+
+    private static void bindFingerprint(
+            java.sql.PreparedStatement statement,
+            TrackingMessage event,
+            java.util.UUID id,
+            String type,
+            String key,
+            int algorithmVersion,
+            String stability)
+            throws java.sql.SQLException {
+        statement.setObject(1, id);
+        statement.setObject(2, event.siteId());
+        statement.setString(3, event.visitorId());
+        statement.setString(4, event.sessionId());
+        statement.setString(5, type);
+        statement.setString(6, key);
+        statement.setInt(7, algorithmVersion);
+        statement.setString(8, stability);
+        statement.setString(9, event.userIdHash());
+        statement.setTimestamp(10, java.sql.Timestamp.from(event.receivedAt()));
     }
 
     private static void setPage(java.sql.PreparedStatement s, int start, CleanUrl p) throws java.sql.SQLException {

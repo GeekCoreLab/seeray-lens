@@ -21,7 +21,10 @@ public class AnalyticsQueryService {
 
     @Inject
     public AnalyticsQueryService(
-            DataSource dataSource, SiteService sites, WorkspaceAccess access, ObjectMapper mapper,
+            DataSource dataSource,
+            SiteService sites,
+            WorkspaceAccess access,
+            ObjectMapper mapper,
             FingerprintRiskService fingerprintRisk) {
         this.dataSource = dataSource;
         this.sites = sites;
@@ -192,8 +195,13 @@ public class AnalyticsQueryService {
                             r.getInt(7),
                             r.getLong(8),
                             r.getBoolean(9),
-                            r.getString(10), risk.level(), risk.relatedVisitorCount(), risk.relatedAccountCount(),
-                            risk.lastObservedAt(), risk.confidence()));
+                            r.getString(10),
+                            risk.level(),
+                            risk.relatedVisitorCount(),
+                            risk.relatedAccountCount(),
+                            risk.lastObservedAt(),
+                            risk.confidence(),
+                            risk.evidenceTypes()));
                 }
             }
             return out;
@@ -445,12 +453,36 @@ public class AnalyticsQueryService {
             int fingerprintRelatedVisitorCount,
             int fingerprintRelatedAccountCount,
             Instant fingerprintLastObservedAt,
-            String fingerprintConfidence) {
+            String fingerprintConfidence,
+            List<String> fingerprintEvidenceTypes) {
         public VisitorLog(
-                String visitorId, Instant startedAt, Instant lastActivityAt, String entryPage, String exitPage,
-                int pageViews, int events, long durationMs, boolean bounce, String visitorType) {
-            this(visitorId, startedAt, lastActivityAt, entryPage, exitPage, pageViews, events, durationMs, bounce,
-                    visitorType, "none", 0, 0, null, "none");
+                String visitorId,
+                Instant startedAt,
+                Instant lastActivityAt,
+                String entryPage,
+                String exitPage,
+                int pageViews,
+                int events,
+                long durationMs,
+                boolean bounce,
+                String visitorType) {
+            this(
+                    visitorId,
+                    startedAt,
+                    lastActivityAt,
+                    entryPage,
+                    exitPage,
+                    pageViews,
+                    events,
+                    durationMs,
+                    bounce,
+                    visitorType,
+                    "none",
+                    0,
+                    0,
+                    null,
+                    "none",
+                    List.of());
         }
     }
 
@@ -476,7 +508,8 @@ public class AnalyticsQueryService {
             int fingerprintRelatedVisitorCount,
             int fingerprintRelatedAccountCount,
             Instant fingerprintLastObservedAt,
-            String fingerprintConfidence) {}
+            String fingerprintConfidence,
+            List<String> fingerprintEvidenceTypes) {}
 
     public record VisitorProfileHistoryPage(
             List<VisitorProfileSession> sessions,

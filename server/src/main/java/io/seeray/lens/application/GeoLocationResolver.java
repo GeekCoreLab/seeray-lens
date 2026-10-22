@@ -32,6 +32,13 @@ public class GeoLocationResolver {
         return resolve(request.remoteAddress().host(), request.headers());
     }
 
+    /** Whether the immediate connection peer is one of the explicitly configured edge proxies. */
+    public boolean isTrustedProxy(HttpServerRequest request) {
+        if (request == null || trustedProxies.isEmpty()) return false;
+        InetAddress peer = address(request.remoteAddress().host());
+        return peer != null && trustedProxies.stream().anyMatch(network -> network.contains(peer));
+    }
+
     Location resolve(String peerAddress, MultiMap headers) {
         if (!configured() || peerAddress == null || peerAddress.isBlank()) return Location.empty();
         InetAddress peer = address(peerAddress);

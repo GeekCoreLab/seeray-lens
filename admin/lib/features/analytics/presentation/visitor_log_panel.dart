@@ -209,10 +209,16 @@ class _VisitorVisitTile extends StatelessWidget {
             if (path.isNotEmpty) path.join('  →  '),
             '${_date(entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
             if (entry.fingerprintRiskLevel != 'none')
-              context.tr(
-                'Possible same browser: ${entry.fingerprintRelatedVisitorCount} other visitor(s)',
-                '可能来自同一浏览器：${entry.fingerprintRelatedVisitorCount} 个其他访客',
-              ),
+              !entry.fingerprintEvidenceTypes.contains('browser') &&
+                      entry.fingerprintConfidence == 'low'
+                  ? context.tr(
+                      'JA4 match: ${entry.fingerprintRelatedVisitorCount} visitors · low confidence',
+                      'JA4 匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 低置信度',
+                    )
+                  : context.tr(
+                      'Browser fingerprint match: ${entry.fingerprintRelatedVisitorCount} visitors · accounts: ${entry.fingerprintRelatedAccountCount}',
+                      '浏览器指纹匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 账号数：${entry.fingerprintRelatedAccountCount}',
+                    ),
           ].join('\n'),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,

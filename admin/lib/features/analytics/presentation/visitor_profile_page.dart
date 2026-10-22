@@ -295,12 +295,22 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
-                            context.tr(
-                              'Possible same browser: ${profile.fingerprintRelatedVisitorCount} other visitor(s)',
-                              '可能来自同一浏览器：${profile.fingerprintRelatedVisitorCount} 个其他访客',
-                            ),
+                            !profile.fingerprintEvidenceTypes.contains(
+                                      'browser',
+                                    ) &&
+                                    profile.fingerprintConfidence == 'low'
+                                ? context.tr(
+                                    'JA4 TLS fingerprint matches ${profile.fingerprintRelatedVisitorCount} other visitor(s) (low confidence; common clients can share JA4). Accounts observed: ${profile.fingerprintRelatedAccountCount}.',
+                                    'JA4 TLS 指纹关联到 ${profile.fingerprintRelatedVisitorCount} 个其他访客（低置信度；常见客户端可能共享 JA4）。观察到的账号数：${profile.fingerprintRelatedAccountCount}。',
+                                  )
+                                : context.tr(
+                                    'Browser fingerprint matches ${profile.fingerprintRelatedVisitorCount} other visitor(s). Accounts observed: ${profile.fingerprintRelatedAccountCount}. This is a risk signal, not proof of the same person.',
+                                    '浏览器指纹关联到 ${profile.fingerprintRelatedVisitorCount} 个其他访客。观察到的账号数：${profile.fingerprintRelatedAccountCount}。这只是风险信号，不能证明是同一人。',
+                                  ),
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),

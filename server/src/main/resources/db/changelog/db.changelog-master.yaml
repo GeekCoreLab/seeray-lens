@@ -552,3 +552,10 @@ databaseChangeLog:
         - sqlFile:
             path: db/changelog/0079-system-administration.sql
             relativeToChangelogFile: false
+  - changeSet:
+      id: 0080-ja4-fingerprint-risk
+      author: seeray
+      changes:
+        - sqlFile:
+            path: db/changelog/0080-ja4-fingerprint-risk.sql
+            relativeToChangelogFile: false

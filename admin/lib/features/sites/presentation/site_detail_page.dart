@@ -288,15 +288,12 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
                       onChanged: (value) =>
                           setState(() => _fingerprintRiskEnabled = value),
                       title: Text(
-                        context.tr(
-                          'Browser fingerprint risk detection',
-                          '浏览器指纹风险检测',
-                        ),
+                        context.tr('Fingerprint risk detection', '指纹风险检测'),
                       ),
                       subtitle: Text(
                         context.tr(
-                          'Optional high-entropy signals are hashed in the browser and used only to flag possibly related visitor IDs or accounts. They never change visitor counts or merge profiles. Replace installed snippets after changing this setting.',
-                          '可选的高熵信号会在浏览器端先哈希，仅用于标记可能相关的访客 ID 或账号，不会改变访客统计或合并画像。修改后请替换已安装的追踪代码。',
+                          'Optional browser and trusted-edge JA4 signals are stored as site-scoped hashes and used only to flag possibly related visitors or accounts. JA4 alone is low confidence because many users share common clients. Signals never change visitor counts or merge profiles. Replace installed snippets after changing this setting.',
+                          '可选的浏览器指纹和可信边缘代理提供的 JA4 信号会以站点范围哈希保存，仅用于标记可能相关的访客或账号。JA4 单独使用时置信度较低，因为许多用户会共享常见客户端。信号不会改变访客统计或合并画像。修改后请替换已安装的追踪代码。',
                         ),
                       ),
                     ),
