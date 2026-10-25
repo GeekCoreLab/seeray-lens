@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../../core/i18n/app_i18n.dart';
+import '../../../core/network/seeray_api.dart';
 import '../../../shared/presentation/app_back_button.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../application/auth_controller.dart';
@@ -18,13 +19,30 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
+  static const _hostedApiAddress = SeeRayApi.defaultBaseUrl;
+  static const _hostedComApiAddress = 'https://seeray-lens.geekcorelab.com';
+  static const _localApiAddress = 'http://localhost:8080';
+  static const _customApiOption = 'custom';
+
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  late final TextEditingController _apiAddress = TextEditingController(
-    text: ref.read(apiProvider).baseUrl,
-  );
+  late final TextEditingController _apiAddress;
+  late String _selectedApiOption;
   bool _rememberPassword = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentApiAddress = ref.read(apiProvider).baseUrl;
+    _apiAddress = TextEditingController(text: currentApiAddress);
+    _selectedApiOption = switch (currentApiAddress) {
+      _hostedApiAddress => _hostedApiAddress,
+      _hostedComApiAddress => _hostedComApiAddress,
+      _localApiAddress => _localApiAddress,
+      _ => _customApiOption,
+    };
+  }
 
   @override
   void dispose() {
@@ -36,7 +54,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Future<void> _signIn() async {
     if (!_form.currentState!.validate()) return;
-    final apiAddress = _normalizeApiAddress(_apiAddress.text);
+    final apiAddress = _normalizeApiAddress(
+      _selectedApiOption == _customApiOption
+          ? _apiAddress.text
+          : _selectedApiOption,
+    );
     ref.read(apiProvider).baseUrl = apiAddress;
     _apiAddress.text = apiAddress;
     final preferences = await SharedPreferences.getInstance();
@@ -110,17 +132,59 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                     const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _apiAddress,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.next,
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedApiOption,
                       decoration: InputDecoration(
                         labelText: context.tr('API address', 'API 地址'),
-                        hintText: 'https://analytics.example.com',
                         prefixIcon: const Icon(Icons.dns_outlined),
                       ),
-                      validator: _validateApiAddress,
+                      items: [
+                        DropdownMenuItem(
+                          value: _hostedApiAddress,
+                          child: Text(
+                            context.tr('SeeRay Lens (.cn)', 'SeeRay Lens（.cn）'),
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: _hostedComApiAddress,
+                          child: Text(
+                            context.tr(
+                              'SeeRay Lens (.com)',
+                              'SeeRay Lens（.com）',
+                            ),
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: _localApiAddress,
+                          child: Text(context.tr('Local development', '本地开发')),
+                        ),
+                        DropdownMenuItem(
+                          value: _customApiOption,
+                          child: Text(context.tr('Custom address', '自定义地址')),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedApiOption = value);
+                        }
+                      },
                     ),
+                    if (_selectedApiOption == _customApiOption) ...[
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _apiAddress,
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: context.tr(
+                            'Custom API address',
+                            '自定义 API 地址',
+                          ),
+                          hintText: 'https://analytics.example.com',
+                        ),
+                        validator: _validateApiAddress,
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _email,

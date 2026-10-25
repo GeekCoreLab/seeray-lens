@@ -14,7 +14,9 @@ class ApiFailure implements Exception {
 }
 
 class SeeRayApi {
-  SeeRayApi({http.Client? client, this.baseUrl = 'http://localhost:8080'})
+  static const defaultBaseUrl = 'https://seeray-lens.geekcorelab.cn';
+
+  SeeRayApi({http.Client? client, this.baseUrl = defaultBaseUrl})
     : _client = client ?? http.Client();
 
   final http.Client _client;

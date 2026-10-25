@@ -71,6 +71,74 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  build-android-apk:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Read application version
+        id: version
+        shell: bash
+        run: |
+          value="$(sed -n 's/^version: *\([0-9][0-9.]*\)\(+.*\)\{0,1\}$/\1/p' admin/pubspec.yaml | head -n1)"
+          test -n "$value"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Decode Android signing keystore
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          keystore_path="$RUNNER_TEMP/seeray-lens-upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Build Android release APK
+        working-directory: admin
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Verify Android APK signature
+        shell: bash
+        run: |
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n1)"
+          test -n "$apksigner"
+          "$apksigner" verify --verbose --print-certs admin/build/app/outputs/flutter-apk/app-release.apk
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: seeray-lens-admin-android-apk-${{ steps.version.outputs.value }}
+          path: admin/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+          if-no-files-found: error
+
   build-deb:
     runs-on: ubuntu-24.04
     needs: build-linux-bundle
@@ -258,7 +326,7 @@ jobs:
   attach-release-packages:
     if: github.event_name == 'release'
     runs-on: ubuntu-24.04
-    needs: [build-linux-bundle, build-deb, build-rpm, build-arch, build-appimage]
+    needs: [build-linux-bundle, build-android-apk, build-deb, build-rpm, build-arch, build-appimage]
     permissions:
       contents: write
     steps:
@@ -277,6 +345,10 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           name: seeray-lens-admin-appimage-${{ needs.build-linux-bundle.outputs.version }}
+          path: dist
+      - uses: actions/download-artifact@v7
+        with:
+          name: seeray-lens-admin-android-apk-${{ needs.build-android-apk.outputs.version }}
           path: dist
       - name: Attach packages to GitHub release
         env:
