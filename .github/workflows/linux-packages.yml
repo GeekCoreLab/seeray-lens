@@ -113,6 +113,19 @@ jobs:
           chmod 600 "$keystore_path"
           echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
 
+      - name: Validate Android signing keystore
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          keytool -certreq -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" -file "$RUNNER_TEMP/seeray-lens-upload.csr" >/dev/null
+
       - name: Build Android release APK
         working-directory: admin
         env:

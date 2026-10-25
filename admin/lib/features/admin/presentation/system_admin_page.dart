@@ -293,7 +293,7 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
     final result = await showDialog<Map<String, dynamic>>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, update) => AlertDialog(
       title: Text(site == null ? context.tr('Create site', '创建站点') : context.tr('Edit site', '编辑站点')),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (site == null) DropdownButtonFormField<String>(value: workspaceId, decoration: InputDecoration(labelText: context.tr('Workspace', '工作区')), items: [for (final workspace in _workspaces) DropdownMenuItem(value: workspace['id'] as String, child: Text(workspace['name'] as String))], onChanged: (value) => update(() => workspaceId = value!)),
+        if (site == null) DropdownButtonFormField<String>(initialValue: workspaceId, decoration: InputDecoration(labelText: context.tr('Workspace', '工作区')), items: [for (final workspace in _workspaces) DropdownMenuItem(value: workspace['id'] as String, child: Text(workspace['name'] as String))], onChanged: (value) => update(() => workspaceId = value!)),
         TextField(controller: name, decoration: InputDecoration(labelText: context.tr('Site name', '站点名称'))),
         TextField(controller: timezone, decoration: InputDecoration(labelText: context.tr('Time zone', '时区'))),
         TextField(controller: language, decoration: InputDecoration(labelText: context.tr('Default language', '默认语言'))),
