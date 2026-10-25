@@ -45,7 +45,7 @@ void main() {
       container.read(authProvider.notifier).refresh(),
     ]);
     expect(tokens, ['access-b', 'access-b']);
-    expect(client.requests, 3, reason: 'login, profile, and one refresh');
+    expect(client.requests, 4, reason: 'login, profile, refresh, and profile');
     expect(container.read(authProvider).refreshToken, 'refresh-b');
   });
 
