@@ -120,11 +120,22 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
-          keytool -certreq -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
+          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null; then
+            echo '::error::ANDROID_KEYSTORE_BASE64 or ANDROID_KEYSTORE_PASSWORD does not match the local keystore.'
+            exit 1
+          fi
+          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null; then
+            echo '::error::ANDROID_KEY_ALIAS is not present in the decoded keystore.'
+            exit 1
+          fi
+          if ! keytool -certreq -keystore "$ANDROID_KEYSTORE_PATH" -storetype JKS \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" -file "$RUNNER_TEMP/seeray-lens-upload.csr" >/dev/null
+            -alias "$ANDROID_KEY_ALIAS" -file "$RUNNER_TEMP/seeray-lens-upload.csr" >/dev/null; then
+            echo '::error::ANDROID_KEY_PASSWORD does not unlock the selected keystore alias.'
+            exit 1
+          fi
 
       - name: Build Android release APK
         working-directory: admin

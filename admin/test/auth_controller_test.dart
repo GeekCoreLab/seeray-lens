@@ -45,7 +45,7 @@ void main() {
       container.read(authProvider.notifier).refresh(),
     ]);
     expect(tokens, ['access-b', 'access-b']);
-    expect(client.requests, 2, reason: 'one login plus one refresh');
+    expect(client.requests, 3, reason: 'login, profile, and one refresh');
     expect(container.read(authProvider).refreshToken, 'refresh-b');
   });
 
@@ -134,7 +134,7 @@ void main() {
     expect(container.read(authProvider).phase, AuthPhase.authenticated);
     expect(container.read(authProvider).accessToken, 'new-access');
     expect(store.value, 'rotated-refresh');
-    expect(client.requests, 1);
+    expect(client.requests, 2, reason: 'refresh and profile requests');
   });
 
   test('a stale restore cannot overwrite a successful manual login', () async {
@@ -189,6 +189,15 @@ class _Client extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     requests++;
+    if (request.url.path.endsWith('/auth/me')) {
+      return http.StreamedResponse(
+        Stream<List<int>>.value(
+          '{"systemAdmin":false,"mustChangePassword":false}'.codeUnits,
+        ),
+        200,
+        headers: const {'content-type': 'application/json'},
+      );
+    }
     return http.StreamedResponse(
       Stream<List<int>>.value(bodies.removeAt(0).codeUnits),
       statuses.removeAt(0),
@@ -262,6 +271,12 @@ class _RejectStaleBearerOnLoginClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.path.endsWith('/auth/me')) {
+      return _jsonResponse(
+        '{"systemAdmin":false,"mustChangePassword":false}',
+        200,
+      );
+    }
     if (request.url.path.endsWith('/auth/login')) {
       final authorization = request.headers['Authorization'];
       loginAuthorizationHeaders.add(authorization);

@@ -134,6 +134,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     const SizedBox(height: 24),
                     DropdownButtonFormField<String>(
                       initialValue: _selectedApiOption,
+                      isExpanded: true,
                       decoration: InputDecoration(
                         labelText: context.tr('API address', 'API 地址'),
                         prefixIcon: const Icon(Icons.dns_outlined),
