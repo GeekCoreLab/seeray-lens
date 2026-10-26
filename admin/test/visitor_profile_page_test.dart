@@ -53,15 +53,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('203.0.113.45'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '203.0.113.45'), findsOneWidget);
     expect(find.textContaining('visitor-123456'), findsNothing);
     await tester.enterText(find.byType(TextField), 'no-match');
     await tester.pumpAndSettle();
-    expect(find.text('203.0.113.45'), findsNothing);
+    expect(find.widgetWithText(ListTile, '203.0.113.45'), findsNothing);
     await tester.enterText(find.byType(TextField), '203.0.113.45');
     await tester.pumpAndSettle();
-    expect(find.text('203.0.113.45'), findsOneWidget);
-    await tester.tap(find.text('203.0.113.45'));
+    expect(find.widgetWithText(ListTile, '203.0.113.45'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, '203.0.113.45'));
     await tester.pumpAndSettle();
 
     expect(find.text('Visitor profile'), findsOneWidget);

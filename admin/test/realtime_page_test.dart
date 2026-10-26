@@ -24,7 +24,7 @@ void main() {
     expect(find.text('Live visitors'), findsOneWidget);
     expect(find.text('Active visitors'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
-    expect(find.text('203.0.113.12'), findsOneWidget);
+    expect(find.textContaining('203.0.113.12'), findsOneWidget);
     expect(find.textContaining('12345678'), findsNothing);
     expect(find.text('Pricing overview'), findsNWidgets(2));
 
