@@ -676,6 +676,7 @@ class ControlPlaneResourceTest {
                 null,
                 null,
                 null,
+                null,
                 null)));
         String deliveryId = given().header("Authorization", "Bearer " + owner.access())
                 .get(path + "/" + extensionId + "/deliveries")

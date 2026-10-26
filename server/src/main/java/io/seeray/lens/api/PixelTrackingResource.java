@@ -101,7 +101,8 @@ public class PixelTrackingResource {
                     null,
                     site.fingerprintRiskEnabled && !site.requireConsent
                             ? ja4FingerprintResolver.hash(site.id, request)
-                            : null);
+                            : null,
+                    null);
             publisher
                     .sendMessage(Message.of(mapper.writeValueAsString(message)))
                     .await()

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.seeray.lens.application.HeatmapConfigService;
 import io.seeray.lens.application.HeatmapMessage;
 import io.seeray.lens.application.HeatmapPayload;
+import io.seeray.lens.application.SelfCheckProbeRegistry;
 import io.seeray.lens.application.SiteService;
 import io.seeray.lens.application.TrackingSanitizer;
 import io.seeray.lens.domain.common.ControlPlaneException;
@@ -16,8 +17,10 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.jboss.logging.Logger;
@@ -33,18 +36,21 @@ public class HeatmapTrackingResource {
     private final ObjectMapper mapper;
     private final MutinyEmitter<String> publisher;
     private final TrackingRateLimiter rateLimiter;
+    private final SelfCheckProbeRegistry selfCheckProbes;
 
     public HeatmapTrackingResource(
             SiteService sites,
             HeatmapConfigService configs,
             ObjectMapper mapper,
             @Channel("heatmap-out") MutinyEmitter<String> publisher,
-            TrackingRateLimiter rateLimiter) {
+            TrackingRateLimiter rateLimiter,
+            SelfCheckProbeRegistry selfCheckProbes) {
         this.sites = sites;
         this.configs = configs;
         this.mapper = mapper;
         this.publisher = publisher;
         this.rateLimiter = rateLimiter;
+        this.selfCheckProbes = selfCheckProbes;
     }
 
     @POST
@@ -52,13 +58,17 @@ public class HeatmapTrackingResource {
             @Valid HeatmapPayload payload,
             @HeaderParam("Origin") String origin,
             @HeaderParam("Referer") String referer,
-            @HeaderParam("Content-Length") String contentLength) {
+            @HeaderParam("Content-Length") String contentLength,
+            @HeaderParam(SelfCheckProbeRegistry.HEADER) String selfCheckId) {
         if (oversized(contentLength, payload))
             throw new ControlPlaneException(413, "HEATMAP_PAYLOAD_TOO_LARGE", "Heatmap payload exceeds 48 KiB");
         if (payload.schemaVersion() == null || payload.schemaVersion() != 1)
             throw new ControlPlaneException(400, "UNSUPPORTED_SCHEMA", "Heatmap schema is not supported");
         if (!rateLimiter.allow(payload.siteId()))
             throw new ControlPlaneException(429, "RATE_LIMITED", "Tracking temporarily rate limited");
+        if (selfCheckProbes.isActive(selfCheckId, SelfCheckProbeRegistry.Pipeline.HEATMAP)) {
+            return collectSelfCheck(payload, selfCheckId);
+        }
         Site site = Site.find("trackingId", payload.siteId()).firstResult();
         HeatmapConfigService.Config config = configs.publicConfig(payload.siteId());
         if (site == null || !site.trackingEnabled || !config.enabled())
@@ -80,7 +90,7 @@ public class HeatmapTrackingResource {
         try {
             publisher
                     .sendMessage(Message.of(
-                            mapper.writeValueAsString(new HeatmapMessage(site.id, config.sampleRate(), payload))))
+                            mapper.writeValueAsString(new HeatmapMessage(site.id, config.sampleRate(), payload, null))))
                     .await()
                     .atMost(java.time.Duration.ofSeconds(5));
         } catch (Exception exception) {
@@ -92,6 +102,44 @@ public class HeatmapTrackingResource {
             }
             LOG.warnf(
                     "Heatmap ingestion enqueue failed (exceptionType=%s, rootCauseType=%s)",
+                    exception.getClass().getSimpleName(), rootCause.getClass().getSimpleName());
+            throw new WebApplicationException(Response.status(503)
+                    .header("Retry-After", "5")
+                    .entity(java.util.Map.of(
+                            "code", "INGESTION_UNAVAILABLE", "message", "Heatmap collection temporarily unavailable"))
+                    .build());
+        }
+        return Response.status(Response.Status.ACCEPTED).build();
+    }
+
+    private Response collectSelfCheck(HeatmapPayload payload, String selfCheckId) {
+        if (!SelfCheckProbeRegistry.HEATMAP_SITE_ID.equals(payload.siteId())
+                || payload.events().size() != 1
+                || !"start".equals(payload.events().getFirst().type())) {
+            throw new ControlPlaneException(400, "INVALID_SELF_CHECK", "Heatmap self-check request is invalid");
+        }
+        HeatmapPayload.Event event = payload.events().getFirst();
+        TrackingSanitizer.CleanUrl clean = TrackingSanitizer.url(event.url(), null);
+        if (clean == null || !SelfCheckProbeRegistry.HEATMAP_HOST.equals(clean.host())) {
+            throw new ControlPlaneException(400, "INVALID_SELF_CHECK", "Heatmap self-check URL is invalid");
+        }
+        UUID syntheticSiteId =
+                UUID.nameUUIDFromBytes(("seeray-heatmap-self-check:" + selfCheckId).getBytes(StandardCharsets.UTF_8));
+        try {
+            publisher
+                    .sendMessage(Message.of(
+                            mapper.writeValueAsString(new HeatmapMessage(syntheticSiteId, 1, payload, selfCheckId))))
+                    .await()
+                    .atMost(java.time.Duration.ofSeconds(5));
+        } catch (Exception exception) {
+            Throwable rootCause = exception;
+            for (int depth = 0; depth < 16; depth++) {
+                Throwable cause = rootCause.getCause();
+                if (cause == null || cause == rootCause) break;
+                rootCause = cause;
+            }
+            LOG.warnf(
+                    "Heatmap self-check publish failed (exceptionType=%s, rootCauseType=%s)",
                     exception.getClass().getSimpleName(), rootCause.getClass().getSimpleName());
             throw new WebApplicationException(Response.status(503)
                     .header("Retry-After", "5")

@@ -13,6 +13,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import jakarta.ws.rs.core.Context;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import org.eclipse.microprofile.reactive.messaging.Channel;
@@ -31,6 +32,7 @@ public class TrackingResource {
     private final GeoLocationResolver geoLocationResolver;
     private final Ja4FingerprintResolver ja4FingerprintResolver;
     private final CrashSourceMapService crashSourceMaps;
+    private final SelfCheckProbeRegistry selfCheckProbes;
 
     public TrackingResource(
             ObjectMapper mapper,
@@ -39,7 +41,8 @@ public class TrackingResource {
             TrackingRateLimiter rateLimiter,
             GeoLocationResolver geoLocationResolver,
             Ja4FingerprintResolver ja4FingerprintResolver,
-            CrashSourceMapService crashSourceMaps) {
+            CrashSourceMapService crashSourceMaps,
+            SelfCheckProbeRegistry selfCheckProbes) {
         this.mapper = mapper;
         this.sites = sites;
         this.publisher = publisher;
@@ -47,6 +50,7 @@ public class TrackingResource {
         this.geoLocationResolver = geoLocationResolver;
         this.ja4FingerprintResolver = ja4FingerprintResolver;
         this.crashSourceMaps = crashSourceMaps;
+        this.selfCheckProbes = selfCheckProbes;
     }
 
     @POST
@@ -54,12 +58,16 @@ public class TrackingResource {
             @Valid TrackingPayload request,
             @HeaderParam("Origin") String origin,
             @HeaderParam("Referer") String referer,
+            @HeaderParam(SelfCheckProbeRegistry.HEADER) String selfCheckId,
             @Context HttpServerRequest httpRequest) {
         if (request.schemaVersion() == null || request.schemaVersion() != 1) {
             throw new ControlPlaneException(400, "UNSUPPORTED_SCHEMA", "Tracking schema is not supported");
         }
         if (!rateLimiter.allow(request.siteId()))
             throw new ControlPlaneException(429, "RATE_LIMITED", "Tracking temporarily rate limited");
+        if (selfCheckProbes.isActive(selfCheckId, SelfCheckProbeRegistry.Pipeline.TRACKING)) {
+            return collectSelfCheck(request, selfCheckId);
+        }
         Site site = Site.find("trackingId", request.siteId()).firstResult();
         if (site == null || !site.trackingEnabled)
             throw new ControlPlaneException(404, "TRACKING_UNAVAILABLE", "Tracking endpoint unavailable");
@@ -118,7 +126,8 @@ public class TrackingResource {
                             : event.fingerprint().stability(),
                     clientError || !site.fingerprintRiskEnabled || site.requireConsent && event.fingerprint() == null
                             ? null
-                            : ja4FingerprintResolver.hash(site.id, httpRequest));
+                            : ja4FingerprintResolver.hash(site.id, httpRequest),
+                    null);
             try {
                 publisher
                         .sendMessage(Message.of(mapper.writeValueAsString(message)))
@@ -138,6 +147,63 @@ public class TrackingResource {
                                         "The server could not confirm that the tracking event was accepted. Retry after 5 seconds."))
                         .build());
             }
+        }
+        return Response.status(Response.Status.ACCEPTED).build();
+    }
+
+    private Response collectSelfCheck(TrackingPayload request, String selfCheckId) {
+        if (!SelfCheckProbeRegistry.TRACKING_SITE_ID.equals(request.siteId())
+                || request.events().size() != 1
+                || !"page_view".equals(request.events().getFirst().type())) {
+            throw new ControlPlaneException(400, "INVALID_SELF_CHECK", "Tracking self-check request is invalid");
+        }
+        TrackingPayload.TrackingEvent event = request.events().getFirst();
+        UUID syntheticSiteId =
+                UUID.nameUUIDFromBytes(("seeray-tracking-self-check:" + selfCheckId).getBytes(StandardCharsets.UTF_8));
+        TrackingSanitizer.CleanUrl page = TrackingSanitizer.url(event.url(), mapper, event.title(), syntheticSiteId);
+        if (page == null || !SelfCheckProbeRegistry.TRACKING_HOST.equals(page.host())) {
+            throw new ControlPlaneException(400, "INVALID_SELF_CHECK", "Tracking self-check URL is invalid");
+        }
+        UUID clientEventId;
+        try {
+            clientEventId = UUID.fromString(event.eventId());
+        } catch (RuntimeException failure) {
+            throw new ControlPlaneException(400, "INVALID_EVENT_ID", "Event id is invalid");
+        }
+        TrackingMessage message = new TrackingMessage(
+                1,
+                UuidV7.next(),
+                clientEventId,
+                syntheticSiteId,
+                Instant.now(),
+                event.occurredAt() == null ? Instant.now() : event.occurredAt(),
+                "page_view",
+                page,
+                TrackingSanitizer.url(event.referrer(), mapper),
+                TrackingSanitizer.json(eventData(event, null, mapper), mapper),
+                event.durationMs(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                selfCheckId);
+        try {
+            publisher
+                    .sendMessage(Message.of(mapper.writeValueAsString(message)))
+                    .await()
+                    .atMost(java.time.Duration.ofSeconds(5));
+        } catch (Exception failure) {
+            LOG.warnf(
+                    "Tracking self-check publish failed (exceptionType=%s)",
+                    failure.getClass().getSimpleName());
+            throw new WebApplicationException(Response.status(503)
+                    .header("Retry-After", "5")
+                    .entity(Map.of(
+                            "code", "TRACKING_INGESTION_UNCONFIRMED", "message", "Tracking ingestion is unavailable"))
+                    .build());
         }
         return Response.status(Response.Status.ACCEPTED).build();
     }

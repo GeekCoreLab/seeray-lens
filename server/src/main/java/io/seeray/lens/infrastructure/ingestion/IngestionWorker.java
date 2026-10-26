@@ -1,6 +1,7 @@
 package io.seeray.lens.infrastructure.ingestion;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.seeray.lens.application.SelfCheckProbeRegistry;
 import io.seeray.lens.application.TrackingMessage;
 import io.smallrye.reactive.messaging.annotations.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -17,6 +18,7 @@ public class IngestionWorker {
     private static final Logger LOG = Logger.getLogger(IngestionWorker.class);
     private final ObjectMapper mapper;
     private final IngestionPersistence persistence;
+    private final SelfCheckProbeRegistry selfCheckProbes;
     private final int maxBatchSize;
     private final List<Pending> pending = new ArrayList<>();
     private final Object lock = new Object();
@@ -25,9 +27,11 @@ public class IngestionWorker {
     public IngestionWorker(
             ObjectMapper mapper,
             IngestionPersistence persistence,
+            SelfCheckProbeRegistry selfCheckProbes,
             @ConfigProperty(name = "seeray.ingestion.max-batch-size", defaultValue = "500") int maxBatchSize) {
         this.mapper = mapper;
         this.persistence = persistence;
+        this.selfCheckProbes = selfCheckProbes;
         this.maxBatchSize = maxBatchSize;
     }
 
@@ -65,9 +69,23 @@ public class IngestionWorker {
             List<TrackingMessage> events = new ArrayList<>(batch.size());
             for (Pending item : batch)
                 events.add(mapper.readValue(String.valueOf(item.message.getPayload()), TrackingMessage.class));
-            persistence.persistBatch(events);
-            for (Pending item : batch) item.completion.complete(null);
-            for (Pending item : batch) item.message.ack();
+            List<TrackingMessage> persisted =
+                    events.stream().filter(event -> event.selfCheckId() == null).toList();
+            if (!persisted.isEmpty()) persistence.persistBatch(persisted);
+            for (int index = 0; index < batch.size(); index++) {
+                Pending item = batch.get(index);
+                TrackingMessage event = events.get(index);
+                item.message.ack().whenComplete((ignored, failure) -> {
+                    if (failure != null) {
+                        item.completion.completeExceptionally(failure);
+                    } else {
+                        if (event.selfCheckId() != null) {
+                            selfCheckProbes.acknowledged(event.selfCheckId(), SelfCheckProbeRegistry.Pipeline.TRACKING);
+                        }
+                        item.completion.complete(null);
+                    }
+                });
+            }
         } catch (Exception error) {
             LOG.error("Tracking batch failed; messages will be rejected", error);
             for (Pending item : batch) item.completion.completeExceptionally(error);

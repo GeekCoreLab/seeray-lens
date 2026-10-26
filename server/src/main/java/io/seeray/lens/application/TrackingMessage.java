@@ -23,4 +23,5 @@ public record TrackingMessage(
         String fingerprintKey,
         Integer fingerprintAlgorithmVersion,
         String fingerprintStability,
-        String ja4FingerprintKey) {}
+        String ja4FingerprintKey,
+        String selfCheckId) {}

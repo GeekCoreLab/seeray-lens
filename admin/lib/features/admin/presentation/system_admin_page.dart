@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +22,12 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
   int _siteTotal = 0;
   bool _loadingUsers = true;
   bool _loadingSites = true;
+  bool _loadingHealthCheck = true;
+  bool _healthRefreshInProgress = false;
   String? _error;
+  String? _healthError;
+  Map<String, dynamic>? _healthCheck;
+  Timer? _healthRefreshTimer;
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _sites = [];
   List<Map<String, dynamic>> _workspaces = [];
@@ -29,6 +36,13 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
   void initState() {
     super.initState();
     Future.microtask(_loadInitial);
+    _healthRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) => _loadHealthCheck());
+  }
+
+  @override
+  void dispose() {
+    _healthRefreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadInitial() async {
@@ -40,7 +54,28 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
     }
-    await Future.wait([_loadUsers(), _loadSites()]);
+    await Future.wait([_loadUsers(), _loadSites(), _loadHealthCheck()]);
+  }
+
+  Future<void> _loadHealthCheck() async {
+    if (_healthRefreshInProgress) return;
+    _healthRefreshInProgress = true;
+    if (_healthCheck == null && mounted) {
+      setState(() { _loadingHealthCheck = true; _healthError = null; });
+    }
+    try {
+      final data = await ref.read(apiProvider).request('GET', '/api/v1/admin/health-check') as Map;
+      if (!mounted) return;
+      setState(() {
+        _healthCheck = Map<String, dynamic>.from(data);
+        _loadingHealthCheck = false;
+        _healthError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() { _loadingHealthCheck = false; _healthError = '$error'; });
+    } finally {
+      _healthRefreshInProgress = false;
+    }
   }
 
   Future<void> _loadUsers({int? page}) async {
@@ -62,7 +97,9 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
         _loadingUsers = false;
       });
     } catch (error) {
-      if (mounted) setState(() { _loadingUsers = false; _error = '$error'; });
+      if (mounted) {
+        setState(() { _loadingUsers = false; _error = '$error'; });
+      }
     }
   }
 
@@ -85,7 +122,9 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
         _loadingSites = false;
       });
     } catch (error) {
-      if (mounted) setState(() { _loadingSites = false; _error = '$error'; });
+      if (mounted) {
+        setState(() { _loadingSites = false; _error = '$error'; });
+      }
     }
   }
 
@@ -98,7 +137,7 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
       );
     }
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(onPressed: () => context.go('/workspaces'), icon: const Icon(Icons.arrow_back)),
@@ -110,6 +149,7 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
           bottom: TabBar(tabs: [
             Tab(text: context.tr('Users', '用户')),
             Tab(text: context.tr('Sites', '站点')),
+            Tab(text: context.tr('Status check', '状态自检')),
           ]),
         ),
         body: Column(
@@ -119,7 +159,7 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
                 content: Text(_error!),
                 actions: [TextButton(onPressed: _loadInitial, child: Text(context.tr('Retry', '重试')))],
               ),
-            Expanded(child: TabBarView(children: [_usersTab(), _sitesTab()])),
+            Expanded(child: TabBarView(children: [_usersTab(), _sitesTab(), _healthCheckTab()])),
           ],
         ),
       ),
@@ -197,6 +237,127 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
     ),
     _pager(_sitePage, _siteTotal, _loadingSites, _loadSites),
   ]);
+
+  Widget _healthCheckTab() {
+    if (_loadingHealthCheck && _healthCheck == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_healthCheck == null) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(_healthError ?? context.tr('Status check is unavailable.', '状态自检暂不可用。')),
+          const SizedBox(height: 8),
+          FilledButton.icon(onPressed: _loadHealthCheck, icon: const Icon(Icons.refresh), label: Text(context.tr('Retry', '重试'))),
+        ]),
+      );
+    }
+    final report = _healthCheck!;
+    final status = report['overallStatus'] as String? ?? 'fail';
+    final checks = (report['checks'] as List?)
+            ?.whereType<Map>()
+            .map((check) => Map<String, dynamic>.from(check))
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return RefreshIndicator(
+      onRefresh: _loadHealthCheck,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            color: _healthStatusColor(context, status).withValues(alpha: 0.08),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: Icon(_healthStatusIcon(status), size: 32, color: _healthStatusColor(context, status)),
+              title: Text(_healthStatusLabel(context, status), style: TextStyle(color: _healthStatusColor(context, status), fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                '${context.tr('Last checked', '上次检查')}：${_healthTime(context, report['checkedAt'])}\n'
+                '${context.tr('Next check', '下次检查')}：${_healthTime(context, report['nextCheckAt'])}',
+              ),
+              trailing: _loadingHealthCheck
+                  ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : null,
+            ),
+          ),
+          if (_healthError != null) ...[
+            const SizedBox(height: 8),
+            Text(_healthError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 12),
+          Text(context.tr('Dependency and collection paths', '依赖服务与采集链路'), style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          for (final check in checks) ...[
+            _healthCheckCard(context, check),
+            const SizedBox(height: 8),
+          ],
+          if (checks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(context.tr('The first startup check is scheduled shortly.', '首次启动自检将在服务启动后稍候执行。')),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _healthCheckCard(BuildContext context, Map<String, dynamic> check) {
+    final status = check['status'] as String? ?? 'fail';
+    final color = _healthStatusColor(context, status);
+    final latency = check['latencyMs'] as num?;
+    final errorType = check['errorType'] as String?;
+    final details = <String>[
+      if (latency != null) '${latency.toInt()} ms',
+      if (errorType != null && errorType.isNotEmpty) '${context.tr('Error', '错误')}：$errorType',
+    ];
+    return Card(
+      child: ListTile(
+        leading: Icon(_healthStatusIcon(status), color: color),
+        title: Text(_healthCheckLabel(context, check['key'] as String? ?? '')),
+        subtitle: details.isEmpty ? null : Text(details.join(' · ')),
+        trailing: Chip(
+          label: Text(_healthStatusLabel(context, status)),
+          side: BorderSide(color: color.withValues(alpha: 0.5)),
+          labelStyle: TextStyle(color: color),
+        ),
+      ),
+    );
+  }
+
+  Color _healthStatusColor(BuildContext context, String status) => switch (status) {
+    'pass' => Colors.green.shade700,
+    'running' || 'pending' => Theme.of(context).colorScheme.tertiary,
+    _ => Theme.of(context).colorScheme.error,
+  };
+
+  IconData _healthStatusIcon(String status) => switch (status) {
+    'pass' => Icons.check_circle_outline,
+    'running' => Icons.sync,
+    'pending' => Icons.schedule,
+    _ => Icons.error_outline,
+  };
+
+  String _healthStatusLabel(BuildContext context, String status) => switch (status) {
+    'pass' => context.tr('Healthy', '正常'),
+    'running' => context.tr('Checking', '检查中'),
+    'pending' => context.tr('Waiting', '等待首次检查'),
+    _ => context.tr('Failed', '异常'),
+  };
+
+  String _healthCheckLabel(BuildContext context, String key) => switch (key) {
+    'database' => context.tr('Database', '数据库'),
+    'redis' => context.tr('Redis rate limiter', 'Redis 限流服务'),
+    'rabbitmq' => context.tr('RabbitMQ messaging', 'RabbitMQ 消息服务'),
+    'tracking_pipeline' => context.tr('Tracking collection pipeline', '行为采集链路'),
+    'heatmap_pipeline' => context.tr('Heatmap collection pipeline', '热图采集链路'),
+    _ => key,
+  };
+
+  String _healthTime(BuildContext context, Object? value) {
+    if (value is! String) return context.tr('Not available', '暂无');
+    final parsed = DateTime.tryParse(value)?.toLocal();
+    if (parsed == null) return context.tr('Not available', '暂无');
+    return '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')} '
+        '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
+  }
 
   Widget _pager(int page, int total, bool loading, Future<void> Function({int? page}) load) {
     final lastPage = total == 0 ? 0 : (total - 1) ~/ _pageSize;
