@@ -53,17 +53,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('3456'), findsOneWidget);
+    expect(find.text('203.0.113.45'), findsOneWidget);
+    expect(find.textContaining('visitor-123456'), findsNothing);
     await tester.enterText(find.byType(TextField), 'no-match');
     await tester.pumpAndSettle();
-    expect(find.textContaining('3456'), findsNothing);
-    await tester.enterText(find.byType(TextField), 'visitor-123456');
+    expect(find.text('203.0.113.45'), findsNothing);
+    await tester.enterText(find.byType(TextField), '203.0.113.45');
     await tester.pumpAndSettle();
-    expect(find.text('Visitor visitor-…3456'), findsOneWidget);
-    await tester.tap(find.text('Visitor visitor-…3456'));
+    expect(find.text('203.0.113.45'), findsOneWidget);
+    await tester.tap(find.text('203.0.113.45'));
     await tester.pumpAndSettle();
 
     expect(find.text('Visitor profile'), findsOneWidget);
+    expect(find.text('203.0.113.45'), findsOneWidget);
+    expect(find.textContaining('visitor-123456'), findsNothing);
     expect(find.text('Linked browser profiles'), findsOneWidget);
     expect(find.text('2'), findsWidgets);
     expect(find.textContaining('/pricing'), findsWidgets);
@@ -103,6 +106,7 @@ class _VisitorApi extends SeeRayApi {
       return [
         {
           'visitorId': 'visitor-123456',
+          'ipAddress': '203.0.113.45',
           'startedAt': '2026-09-18T10:00:00Z',
           'lastActivityAt': '2026-09-18T10:03:00Z',
           'entryPage': '/pricing',
@@ -165,6 +169,7 @@ class _VisitorApi extends SeeRayApi {
         'sessions': [
           {
             'sessionId': 'session-abc123',
+            'ipAddress': '203.0.113.45',
             'startedAt': '2026-09-18T10:00:00Z',
             'lastActivityAt': '2026-09-18T10:03:00Z',
             'entryPage': '/pricing',

@@ -24,7 +24,8 @@ void main() {
     expect(find.text('Live visitors'), findsOneWidget);
     expect(find.text('Active visitors'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
-    expect(find.textContaining('Visitor 12345678'), findsOneWidget);
+    expect(find.text('203.0.113.12'), findsOneWidget);
+    expect(find.textContaining('12345678'), findsNothing);
     expect(find.text('Pricing overview'), findsNWidgets(2));
 
     await tester.tap(find.byType(ExpansionTile).first);
@@ -52,6 +53,7 @@ class _LiveApi extends SeeRayApi {
     final now = DateTime.now().toUtc().toIso8601String();
     final sharedVisit = <String, dynamic>{
       'visitorId': '12345678-1234-4234-8234-123456789012',
+      'ipAddress': '203.0.113.12',
       'sessionId': '22345678-1234-4234-8234-123456789012',
       'startedAt': now,
       'lastActivityAt': now,
@@ -84,6 +86,7 @@ class _LiveApi extends SeeRayApi {
       {
         ...sharedVisit,
         'visitorId': '32345678-1234-4234-8234-123456789012',
+        'ipAddress': '203.0.113.34',
         'sessionId': '42345678-1234-4234-8234-123456789012',
         'uniqueIdentity': false,
       },
