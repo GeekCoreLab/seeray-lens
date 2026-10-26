@@ -217,7 +217,8 @@ public class AnalyticsQueryService {
             Map<String, VisitorAssociationGroups.Labels> groups = VisitorAssociationGroups.assign(signals);
             List<VisitorLog> labeled = new ArrayList<>(out.size());
             for (int index = 0; index < out.size(); index++) {
-                labeled.add(out.get(index).withFingerprintGroups(groups.get(signals.get(index).recordKey())));
+                labeled.add(out.get(index)
+                        .withFingerprintGroups(groups.get(signals.get(index).recordKey())));
             }
             return labeled;
         } catch (SQLException e) {
@@ -330,42 +331,46 @@ public class AnalyticsQueryService {
                     } catch (Exception invalidActions) {
                         actions = List.of();
                     }
-                    visitorRows.add(new LiveVisitorRow(new LiveVisitor(
-                            rows.getString(1),
-                            rows.getString(2),
-                            startedAt,
-                            lastActivityAt,
-                            rows.getInt(5),
-                            rows.getInt(6),
-                            rows.getString(7),
-                            rows.getString(8),
-                            rows.getString(9),
-                            rows.getString(10),
-                            rows.getString(11),
-                            rows.getString(12),
-                            rows.getString(13),
-                            rows.getString(14),
-                            rows.getString(15),
-                            rows.getString(16),
-                            rows.getString(17),
-                            Duration.between(startedAt, lastActivityAt).toMillis(),
-                            actions,
-                            rows.getBoolean(19),
-                            rows.getString(20),
-                            null,
-                            null),
+                    visitorRows.add(new LiveVisitorRow(
+                            new LiveVisitor(
+                                    rows.getString(1),
+                                    rows.getString(2),
+                                    startedAt,
+                                    lastActivityAt,
+                                    rows.getInt(5),
+                                    rows.getInt(6),
+                                    rows.getString(7),
+                                    rows.getString(8),
+                                    rows.getString(9),
+                                    rows.getString(10),
+                                    rows.getString(11),
+                                    rows.getString(12),
+                                    rows.getString(13),
+                                    rows.getString(14),
+                                    rows.getString(15),
+                                    rows.getString(16),
+                                    rows.getString(17),
+                                    Duration.between(startedAt, lastActivityAt).toMillis(),
+                                    actions,
+                                    rows.getBoolean(19),
+                                    rows.getString(20),
+                                    null,
+                                    null),
                             rows.getString(21),
                             rows.getString(22)));
                 }
             }
             List<VisitorAssociationGroups.Signal> signals = visitorRows.stream()
                     .map(row -> new VisitorAssociationGroups.Signal(
-                            row.visitor().visitorId() + "|" + row.visitor().sessionId(), row.tlsKey(), row.browserKey()))
+                            row.visitor().visitorId() + "|" + row.visitor().sessionId(),
+                            row.tlsKey(),
+                            row.browserKey()))
                     .toList();
             Map<String, VisitorAssociationGroups.Labels> groups = VisitorAssociationGroups.assign(signals);
             List<LiveVisitor> visitors = visitorRows.stream()
-                    .map(row -> row.visitor().withFingerprintGroups(groups.get(
-                            row.visitor().visitorId() + "|" + row.visitor().sessionId())))
+                    .map(row -> row.visitor()
+                            .withFingerprintGroups(groups.get(row.visitor().visitorId() + "|"
+                                    + row.visitor().sessionId())))
                     .toList();
             return visitors;
         } catch (SQLException error) {
