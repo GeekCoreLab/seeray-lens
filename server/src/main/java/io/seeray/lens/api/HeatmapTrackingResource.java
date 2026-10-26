@@ -20,12 +20,14 @@ import java.util.List;
 import java.util.Locale;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Message;
+import org.jboss.logging.Logger;
 
 @Path("/api/v1/collect/heatmaps")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class HeatmapTrackingResource {
     private static final int MAX_PAYLOAD_BYTES = 48 * 1024;
+    private static final Logger LOG = Logger.getLogger(HeatmapTrackingResource.class);
     private final SiteService sites;
     private final HeatmapConfigService configs;
     private final ObjectMapper mapper;
@@ -82,6 +84,16 @@ public class HeatmapTrackingResource {
                     .await()
                     .atMost(java.time.Duration.ofSeconds(5));
         } catch (Exception exception) {
+            Throwable rootCause = exception;
+            for (int depth = 0; depth < 16; depth++) {
+                Throwable cause = rootCause.getCause();
+                if (cause == null || cause == rootCause) break;
+                rootCause = cause;
+            }
+            LOG.warnf(
+                    "Heatmap ingestion enqueue failed (exceptionType=%s, rootCauseType=%s)",
+                    exception.getClass().getSimpleName(),
+                    rootCause.getClass().getSimpleName());
             throw new WebApplicationException(Response.status(503)
                     .header("Retry-After", "5")
                     .entity(java.util.Map.of(

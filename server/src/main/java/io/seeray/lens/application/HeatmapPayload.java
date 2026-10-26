@@ -1,15 +1,18 @@
 package io.seeray.lens.application;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.util.List;
 
 /** Deliberately excludes visitor, session, DOM, text, and selector data. */
+@RegisterForReflection
 public record HeatmapPayload(
         @NotNull Integer schemaVersion,
         @NotBlank @Size(max = 64) String siteId,
         @NotBlank @Pattern(regexp = "^[0-9a-fA-F-]{36}$") String clientBatchId,
         @NotEmpty @Size(max = 500) List<@Valid Event> events) {
+    @RegisterForReflection
     public record Event(
             @NotBlank @Pattern(regexp = "^(start|click|move|scroll)$") String type,
             @NotBlank @Pattern(regexp = "^[0-9a-fA-F-]{36}$") String instanceId,
