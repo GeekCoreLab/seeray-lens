@@ -92,8 +92,7 @@ public class HeatmapTrackingResource {
             }
             LOG.warnf(
                     "Heatmap ingestion enqueue failed (exceptionType=%s, rootCauseType=%s)",
-                    exception.getClass().getSimpleName(),
-                    rootCause.getClass().getSimpleName());
+                    exception.getClass().getSimpleName(), rootCause.getClass().getSimpleName());
             throw new WebApplicationException(Response.status(503)
                     .header("Retry-After", "5")
                     .entity(java.util.Map.of(
