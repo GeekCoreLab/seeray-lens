@@ -39,6 +39,22 @@ public class GeoLocationResolver {
         return peer != null && trustedProxies.stream().anyMatch(network -> network.contains(peer));
     }
 
+    /** Returns the numeric client address, trusting forwarding headers only from configured proxies. */
+    public String clientIp(HttpServerRequest request) {
+        if (request == null || request.remoteAddress() == null) return null;
+        String peerAddress = request.remoteAddress().host();
+        String candidate = peerAddress;
+        if (isTrustedProxy(request)) {
+            candidate = request.getHeader("cf-connecting-ip");
+            if (candidate == null || candidate.isBlank()) candidate = request.getHeader("x-real-ip");
+        }
+        InetAddress parsed = address(candidate);
+        if (parsed == null) return null;
+        String normalized = parsed.getHostAddress();
+        int scope = normalized.indexOf('%');
+        return scope < 0 ? normalized : normalized.substring(0, scope);
+    }
+
     Location resolve(String peerAddress, MultiMap headers) {
         if (!configured() || peerAddress == null || peerAddress.isBlank()) return Location.empty();
         InetAddress peer = address(peerAddress);

@@ -127,7 +127,10 @@ public class TrackingResource {
                     clientError || !site.fingerprintRiskEnabled || site.requireConsent && event.fingerprint() == null
                             ? null
                             : ja4FingerprintResolver.hash(site.id, httpRequest),
-                    null);
+                    null,
+                    clientError || event.visitorId() == null || event.sessionId() == null
+                            ? null
+                            : geoLocationResolver.clientIp(httpRequest));
             try {
                 publisher
                         .sendMessage(Message.of(mapper.writeValueAsString(message)))
@@ -189,7 +192,8 @@ public class TrackingResource {
                 null,
                 null,
                 null,
-                selfCheckId);
+                selfCheckId,
+                null);
         try {
             publisher
                     .sendMessage(Message.of(mapper.writeValueAsString(message)))

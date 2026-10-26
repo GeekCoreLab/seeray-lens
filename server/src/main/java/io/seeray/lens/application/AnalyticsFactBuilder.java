@@ -95,7 +95,7 @@ public class AnalyticsFactBuilder {
 
     private static List<Event> load(Connection c, UUID site, Instant from, Instant to) throws SQLException {
         String sql =
-                "select client_visitor_id,client_session_id,event_type,occurred_at,received_at,page_path,page_host,referrer_host,utm_source,utm_medium,utm_campaign,duration_ms,event_data,page_title,utm_term,utm_content,user_id_hash,ad_click_platform,ad_click_id_hash from raw_event where site_id=? and (case when occurred_at < received_at - interval '24 hours' or occurred_at > received_at + interval '24 hours' then received_at else occurred_at end) >= ? and (case when occurred_at < received_at - interval '24 hours' or occurred_at > received_at + interval '24 hours' then received_at else occurred_at end) < ? order by (case when occurred_at < received_at - interval '24 hours' or occurred_at > received_at + interval '24 hours' then received_at else occurred_at end),received_at,ingest_id";
+                "select client_visitor_id,client_session_id,event_type,occurred_at,received_at,page_path,page_host,referrer_host,utm_source,utm_medium,utm_campaign,duration_ms,event_data,page_title,utm_term,utm_content,user_id_hash,ad_click_platform,ad_click_id_hash,host(client_ip) from raw_event where site_id=? and (case when occurred_at < received_at - interval '24 hours' or occurred_at > received_at + interval '24 hours' then received_at else occurred_at end) >= ? and (case when occurred_at < received_at - interval '24 hours' or occurred_at > received_at + interval '24 hours' then received_at else occurred_at end) < ? order by (case when occurred_at < received_at - interval '24 hours' or occurred_at > received_at + interval '24 hours' then received_at else occurred_at end),received_at,ingest_id";
         List<Event> out = new ArrayList<>();
         try (PreparedStatement p = c.prepareStatement(sql)) {
             p.setObject(1, site);
@@ -122,7 +122,8 @@ public class AnalyticsFactBuilder {
                             r.getString(16),
                             r.getString(17),
                             r.getString(18),
-                            r.getString(19)));
+                            r.getString(19),
+                            r.getString(20)));
             }
         }
         return out;
@@ -174,7 +175,7 @@ public class AnalyticsFactBuilder {
             throws SQLException {
         Set<UUID> visitorsWithInsertedSessions = new HashSet<>();
         try (PreparedStatement p = c.prepareStatement(
-                "insert into analytics_session(id,site_id,visitor_id,client_session_id,started_at,last_activity_at,ended_at,entry_page,exit_page,page_view_count,event_count,duration_ms,is_bounce,visitor_type,initial_referrer_host,initial_page_host,initial_utm_source,initial_utm_medium,initial_utm_campaign,browser,browser_version,operating_system,operating_system_version,device_type,language,screen_width,screen_height,viewport_width,viewport_height,pixel_ratio,entry_page_title,exit_page_title,country_code,continent_code,region_code,region_name,city,geo_timezone,initial_utm_term,initial_utm_content,user_id_hash,user_id_conflict,identity_key,ad_click_platform,ad_click_id_hash) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                "insert into analytics_session(id,site_id,visitor_id,client_session_id,started_at,last_activity_at,ended_at,entry_page,exit_page,page_view_count,event_count,duration_ms,is_bounce,visitor_type,initial_referrer_host,initial_page_host,initial_utm_source,initial_utm_medium,initial_utm_campaign,browser,browser_version,operating_system,operating_system_version,device_type,language,screen_width,screen_height,viewport_width,viewport_height,pixel_ratio,entry_page_title,exit_page_title,country_code,continent_code,region_code,region_name,city,geo_timezone,initial_utm_term,initial_utm_content,user_id_hash,user_id_conflict,identity_key,ad_click_platform,ad_click_id_hash,client_ip) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::inet)")) {
             for (VisitorAcc v : values)
                 for (SessionAcc s : v.sessions) {
                     if (!s.startedAt.isBefore(to) || s.lastActivity.isBefore(from)) continue;
@@ -226,6 +227,7 @@ public class AnalyticsFactBuilder {
                     p.setString(43, s.userIdHash == null ? "browser:" + v.clientId : "user:" + s.userIdHash);
                     p.setString(44, s.adClickPlatform);
                     p.setString(45, s.adClickIdHash);
+                    p.setString(46, s.clientIp);
                     p.addBatch();
                     visitorsWithInsertedSessions.add(visitorId);
                 }
@@ -375,7 +377,8 @@ public class AnalyticsFactBuilder {
             String utmContent,
             String userIdHash,
             String adClickPlatform,
-            String adClickIdHash) {}
+            String adClickIdHash,
+            String clientIp) {}
 
     private static final class VisitorAcc {
         String clientId;
@@ -393,6 +396,7 @@ public class AnalyticsFactBuilder {
 
     private static final class SessionAcc {
         String clientSessionId, entryPage, exitPage, referrer, host, utm, utmMedium, utmCampaign, utmTerm, utmContent;
+        String clientIp;
         String adClickPlatform, adClickIdHash;
         String entryPageTitle, exitPageTitle;
         String userIdHash;
@@ -413,6 +417,7 @@ public class AnalyticsFactBuilder {
         }
 
         void accept(Event e, Instant t, ObjectMapper m) {
+            if (e.clientIp != null) clientIp = e.clientIp;
             if (e.userIdHash != null && !conflictingUserIds) {
                 if (userIdHash == null) userIdHash = e.userIdHash;
                 else if (!userIdHash.equals(e.userIdHash)) {

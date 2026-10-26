@@ -7,6 +7,7 @@ import '../../../core/i18n/app_i18n.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/realtime_controller.dart';
+import 'visitor_association_controls.dart';
 
 class RealtimePage extends ConsumerStatefulWidget {
   const RealtimePage({required this.siteId, this.embedded = false, super.key});
@@ -22,6 +23,8 @@ class _RealtimePageState extends ConsumerState<RealtimePage> {
   static const _windows = [5, 15, 30];
   late Timer _refreshTimer;
   int _windowMinutes = 30;
+  VisitorAssociationView _associationView = VisitorAssociationView.ip;
+  bool _aggregate = false;
 
   AnalyticsRealtimeQuery get _query =>
       (siteId: widget.siteId, windowMinutes: _windowMinutes);
@@ -72,6 +75,16 @@ class _RealtimePageState extends ConsumerState<RealtimePage> {
   }
 
   Widget _body(BuildContext context, List<AnalyticsLiveVisitor> visitors) {
+    final groups = visitorAssociationGroups(
+      records: visitors,
+      aggregate: _aggregate,
+      visitorId: (visitor) => visitor.visitorId,
+      associationKey: (visitor) => switch (_associationView) {
+        VisitorAssociationView.ip => visitor.ipAddress,
+        VisitorAssociationView.tls => visitor.tlsFingerprintGroup,
+        VisitorAssociationView.browser => visitor.browserFingerprintGroup,
+      },
+    );
     final uniqueVisitors = visitors
         .where((visitor) => visitor.uniqueIdentity)
         .length;
@@ -144,6 +157,13 @@ class _RealtimePageState extends ConsumerState<RealtimePage> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          VisitorAssociationControls(
+            view: _associationView,
+            onViewChanged: (value) => setState(() => _associationView = value),
+            aggregate: _aggregate,
+            onAggregateChanged: (value) => setState(() => _aggregate = value),
+          ),
           const SizedBox(height: 10),
           if (visitors.isEmpty)
             Card(
@@ -177,13 +197,28 @@ class _RealtimePageState extends ConsumerState<RealtimePage> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 context.tr(
-                  'Showing the latest ${visitors.length} active visits',
-                  '显示最近的 ${visitors.length} 次活跃访问',
+                  _aggregate
+                      ? 'Showing ${groups.length} groups across ${visitors.length} active visits'
+                      : 'Showing the latest ${visitors.length} active visits',
+                  _aggregate
+                      ? '${visitors.length} 次活跃访问，归为 ${groups.length} 组'
+                      : '显示最近的 ${visitors.length} 次活跃访问',
                 ),
                 style: Theme.of(context).textTheme.labelLarge,
               ),
             ),
-            for (final visitor in visitors) _LiveVisitCard(visitor: visitor),
+            for (var index = 0; index < groups.length; index++)
+              if (_aggregate && groups[index].length > 1)
+                _LiveVisitGroup(
+                  index: index + 1,
+                  visitors: groups[index],
+                  view: _associationView,
+                )
+              else
+                _LiveVisitCard(
+                  visitor: groups[index].first,
+                  view: _associationView,
+                ),
           ],
         ],
       ),
@@ -229,14 +264,13 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _LiveVisitCard extends StatelessWidget {
-  const _LiveVisitCard({required this.visitor});
+  const _LiveVisitCard({required this.visitor, required this.view});
 
   final AnalyticsLiveVisitor visitor;
+  final VisitorAssociationView view;
 
   @override
   Widget build(BuildContext context) {
-    final id = visitor.visitorId;
-    final shortId = id.length <= 8 ? id : id.substring(0, 8);
     final page = visitor.currentTitle?.isNotEmpty == true
         ? visitor.currentTitle!
         : visitor.currentPage ?? context.tr('Unknown page', '未知页面');
@@ -245,6 +279,13 @@ class _LiveVisitCard extends StatelessWidget {
         .where((value) => value.isNotEmpty)
         .toSet()
         .join(' · ');
+    final association = visitorAssociationValue(
+      context,
+      view,
+      ipAddress: visitor.ipAddress,
+      tlsFingerprintGroup: visitor.tlsFingerprintGroup,
+      browserFingerprintGroup: visitor.browserFingerprintGroup,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -256,7 +297,7 @@ class _LiveVisitCard extends StatelessWidget {
         ),
         title: Text(page, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
-          '${context.tr('Visitor', '访客')} $shortId · ${_relativeTime(context, visitor.lastActivityAt)}',
+          '$association · ${_relativeTime(context, visitor.lastActivityAt)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -274,6 +315,11 @@ class _LiveVisitCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              if (visitor.ipAddress != null)
+                _InfoChip(
+                  icon: Icons.lan_outlined,
+                  text: '${context.tr('IP', 'IP')}: ${visitor.ipAddress}',
+                ),
               if (location.isNotEmpty)
                 _InfoChip(icon: Icons.place_outlined, text: location),
               if (visitor.deviceType != null)
@@ -363,6 +409,39 @@ class _LiveVisitCard extends StatelessWidget {
       '访问 ${seconds ~/ 60} 分 ${seconds % 60} 秒',
     );
   }
+}
+
+class _LiveVisitGroup extends StatelessWidget {
+  const _LiveVisitGroup({
+    required this.index,
+    required this.visitors,
+    required this.view,
+  });
+
+  final int index;
+  final List<AnalyticsLiveVisitor> visitors;
+  final VisitorAssociationView view;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 10),
+    clipBehavior: Clip.antiAlias,
+    child: ExpansionTile(
+      leading: const CircleAvatar(child: Icon(Icons.hub_outlined)),
+      title: Text(context.tr('Possible related group $index', '疑似关联组 $index')),
+      subtitle: Text(
+        context.tr(
+          '${visitors.length} active visits',
+          '${visitors.length} 次活跃访问',
+        ),
+      ),
+      childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      children: [
+        for (final visitor in visitors)
+          _LiveVisitCard(visitor: visitor, view: view),
+      ],
+    ),
+  );
 }
 
 class _InfoChip extends StatelessWidget {

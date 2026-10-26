@@ -48,6 +48,9 @@ class AnalyticsLiveVisitor {
     required this.durationMs,
     required this.actions,
     required this.uniqueIdentity,
+    required this.ipAddress,
+    required this.tlsFingerprintGroup,
+    required this.browserFingerprintGroup,
   });
 
   final String visitorId;
@@ -70,6 +73,9 @@ class AnalyticsLiveVisitor {
   final int durationMs;
   final List<AnalyticsLiveAction> actions;
   final bool uniqueIdentity;
+  final String? ipAddress;
+  final String? tlsFingerprintGroup;
+  final String? browserFingerprintGroup;
 
   factory AnalyticsLiveVisitor.fromJson(Map<String, dynamic> json) =>
       AnalyticsLiveVisitor(
@@ -94,6 +100,9 @@ class AnalyticsLiveVisitor {
         language: json['language'] as String?,
         durationMs: (json['durationMs'] as num?)?.toInt() ?? 0,
         uniqueIdentity: json['uniqueIdentity'] as bool? ?? true,
+        ipAddress: json['ipAddress'] as String?,
+        tlsFingerprintGroup: json['tlsFingerprintGroup'] as String?,
+        browserFingerprintGroup: json['browserFingerprintGroup'] as String?,
         actions: (json['actions'] as List? ?? const [])
             .whereType<Map>()
             .map(

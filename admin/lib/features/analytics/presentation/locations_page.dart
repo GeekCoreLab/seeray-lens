@@ -37,9 +37,9 @@ class LocationsPage extends ConsumerWidget {
                 englishTitle: 'Visitor locations',
                 chineseTitle: '访客地域说明',
                 englishBody:
-                    'Location is estimated from the visitor IP by your trusted edge proxy and is attached to the first page view of a visit. Raw IP addresses are not stored. Configure a trusted proxy and its country/location headers on the server.',
+                    'Location is estimated from the visitor IP by your trusted edge proxy and is attached to the first page view of a visit. This report stores only coarse location dimensions; Live and Visitors views retain accepted-event IP addresses under a 30-day policy. Configure a trusted proxy and its country/location headers on the server.',
                 chineseBody:
-                    '访客地域由可信边缘代理根据 IP 估算，并记录在每次访问的首个页面浏览上。系统不保存原始 IP。请在服务端配置可信代理及地域请求头。',
+                    '访客地域由可信边缘代理根据 IP 估算，并记录在每次访问的首个页面浏览上。本报表只保存粗粒度地域字段；实时访客和访客页面按 30 天策略保留已接收事件的 IP。请在服务端配置可信代理及地域请求头。',
               ),
             ),
       body: report.when(
@@ -123,8 +123,8 @@ class _LocationReportState extends State<_LocationReport> {
                 Expanded(
                   child: Text(
                     context.tr(
-                      'IP geolocation is approximate. Raw visitor IP addresses are not retained.',
-                      'IP 地理定位仅为估算；系统不会留存访客原始 IP 地址。',
+                      'IP geolocation is approximate. Location reports use coarse fields; visitor IP display has a separate 30-day retention policy.',
+                      'IP 地理定位仅为估算。地域报表使用粗粒度字段；访客 IP 展示单独按 30 天策略保留。',
                     ),
                   ),
                 ),

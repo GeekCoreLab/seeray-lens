@@ -24,7 +24,7 @@ Custom event properties can be registered as named report dimensions and managed
 
 Reusable audience segments can be composed in the site UI and applied across core reports, including custom-dimension values. See [audience segments](docs/analytics/segments.md) for supported rules and current report coverage.
 
-The site analytics UI includes normalized technology and page-behaviour reports, plus country/continent/region/city breakdowns when a trusted edge proxy is configured. Location collection is disabled by default and does not retain IP addresses; see [visitor locations](docs/analytics/locations.md) for the required proxy setup and privacy limits.
+The site analytics UI includes normalized technology and page-behaviour reports, plus country/continent/region/city breakdowns when a trusted edge proxy is configured. Location reports use coarse dimensions; the Live and Visitors inspection views separately retain accepted-event IP addresses under a 30-day policy. See [visitor locations](docs/analytics/locations.md) for proxy setup and privacy limits.
 
 The Live tab reads recent accepted events directly, shows active visits with their latest page and action trail, and refreshes automatically. See [live visitor reports](docs/analytics/realtime.md) for the timing and retention semantics.
 

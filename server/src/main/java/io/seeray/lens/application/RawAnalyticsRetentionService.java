@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 @ApplicationScoped
 public class RawAnalyticsRetentionService {
     private static final int BATCH_SIZE = 10_000;
+    private static final int CLIENT_IP_RETENTION_DAYS = 30;
     private final DataSource dataSource;
 
     @Inject
@@ -30,8 +31,10 @@ public class RawAnalyticsRetentionService {
             Instant now = Instant.now();
             for (Policy policy : policies) {
                 Instant rawCutoff = now.minus(Duration.ofDays(policy.rawRetentionDays));
+                Instant clientIpCutoff = now.minus(Duration.ofDays(CLIENT_IP_RETENTION_DAYS));
                 LocalDate aggregateCutoff = LocalDate.now(policy.zone).minusDays(policy.aggregateRetentionDays);
                 rawEvents += deleteRawEvents(connection, policy.siteId, rawCutoff);
+                clearExpiredClientIps(connection, policy.siteId, clientIpCutoff);
                 deleteFingerprintObservations(connection, policy.siteId,
                         now.minus(Duration.ofDays(policy.fingerprintRetentionDays)));
                 aggregateRows += deleteDatedAggregates(connection, policy.siteId, aggregateCutoff);
@@ -68,6 +71,21 @@ public class RawAnalyticsRetentionService {
                     statement.setObject(1, siteId);
                     statement.setTimestamp(2, Timestamp.from(cutoff));
                 });
+    }
+
+    private static void clearExpiredClientIps(Connection connection, UUID siteId, Instant cutoff) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "update raw_event set client_ip=null where site_id=? and received_at<? and client_ip is not null")) {
+            statement.setObject(1, siteId);
+            statement.setTimestamp(2, Timestamp.from(cutoff));
+            statement.executeUpdate();
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "update analytics_session set client_ip=null where site_id=? and started_at<? and client_ip is not null")) {
+            statement.setObject(1, siteId);
+            statement.setTimestamp(2, Timestamp.from(cutoff));
+            statement.executeUpdate();
+        }
     }
 
     private static long deleteDatedAggregates(Connection connection, UUID siteId, LocalDate cutoff)

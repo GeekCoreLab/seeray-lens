@@ -25,18 +25,21 @@ public class PixelTrackingResource {
     private final MutinyEmitter<String> publisher;
     private final TrackingRateLimiter rateLimiter;
     private final Ja4FingerprintResolver ja4FingerprintResolver;
+    private final GeoLocationResolver geoLocationResolver;
 
     public PixelTrackingResource(
             ObjectMapper mapper,
             SiteService sites,
             @Channel("tracking-out") MutinyEmitter<String> publisher,
             TrackingRateLimiter rateLimiter,
-            Ja4FingerprintResolver ja4FingerprintResolver) {
+            Ja4FingerprintResolver ja4FingerprintResolver,
+            GeoLocationResolver geoLocationResolver) {
         this.mapper = mapper;
         this.sites = sites;
         this.publisher = publisher;
         this.rateLimiter = rateLimiter;
         this.ja4FingerprintResolver = ja4FingerprintResolver;
+        this.geoLocationResolver = geoLocationResolver;
     }
 
     @GET
@@ -102,7 +105,8 @@ public class PixelTrackingResource {
                     site.fingerprintRiskEnabled && !site.requireConsent
                             ? ja4FingerprintResolver.hash(site.id, request)
                             : null,
-                    null);
+                    null,
+                    site.requireConsent ? null : geoLocationResolver.clientIp(request));
             publisher
                     .sendMessage(Message.of(mapper.writeValueAsString(message)))
                     .await()

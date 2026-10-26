@@ -169,12 +169,15 @@ public class AnalyticsQueryService {
         int limit = Math.max(1, Math.min(requestedLimit, 200));
         String sql =
                 """
-                select v.client_visitor_id,s.started_at,s.last_activity_at,s.entry_page,s.exit_page,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type
+                select v.client_visitor_id,s.client_session_id,host(s.client_ip),s.started_at,s.last_activity_at,s.entry_page,s.exit_page,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,
+                  (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='ja4' order by o.observed_at desc limit 1),
+                  (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1)
                 from analytics_session s join analytics_visitor v on v.id=s.visitor_id
                 where s.site_id=? and (s.started_at at time zone (select timezone from site where id=?))::date between ? and ?
                 order by s.started_at desc limit ?
                 """;
         List<VisitorLog> out = new ArrayList<>();
+        List<VisitorAssociationGroups.Signal> signals = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
                 PreparedStatement p = c.prepareStatement(sql)) {
             p.setObject(1, site);
@@ -184,27 +187,39 @@ public class AnalyticsQueryService {
             p.setInt(5, limit);
             try (ResultSet r = p.executeQuery()) {
                 while (r.next()) {
-                    FingerprintRiskService.Risk risk = fingerprintRisk.risk(site, r.getString(1));
+                    String visitorId = r.getString(1);
+                    String sessionId = r.getString(2);
+                    String recordKey = visitorId + "|" + sessionId;
+                    FingerprintRiskService.Risk risk = fingerprintRisk.risk(site, visitorId);
                     out.add(new VisitorLog(
-                            r.getString(1),
-                            r.getTimestamp(2).toInstant(),
-                            r.getTimestamp(3).toInstant(),
-                            r.getString(4),
-                            r.getString(5),
-                            r.getInt(6),
-                            r.getInt(7),
-                            r.getLong(8),
-                            r.getBoolean(9),
-                            r.getString(10),
+                            visitorId,
+                            r.getTimestamp(4).toInstant(),
+                            r.getTimestamp(5).toInstant(),
+                            r.getString(6),
+                            r.getString(7),
+                            r.getInt(8),
+                            r.getInt(9),
+                            r.getLong(10),
+                            r.getBoolean(11),
+                            r.getString(12),
                             risk.level(),
                             risk.relatedVisitorCount(),
                             risk.relatedAccountCount(),
                             risk.lastObservedAt(),
                             risk.confidence(),
-                            risk.evidenceTypes()));
+                            risk.evidenceTypes(),
+                            r.getString(3),
+                            null,
+                            null));
+                    signals.add(new VisitorAssociationGroups.Signal(recordKey, r.getString(13), r.getString(14)));
                 }
             }
-            return out;
+            Map<String, VisitorAssociationGroups.Labels> groups = VisitorAssociationGroups.assign(signals);
+            List<VisitorLog> labeled = new ArrayList<>(out.size());
+            for (int index = 0; index < out.size(); index++) {
+                labeled.add(out.get(index).withFingerprintGroups(groups.get(signals.get(index).recordKey())));
+            }
+            return labeled;
         } catch (SQLException e) {
             throw new IllegalStateException("Could not query visitor log", e);
         }
@@ -217,15 +232,15 @@ public class AnalyticsQueryService {
         String sql =
                 """
                 with active_sessions as (
-                  select client_visitor_id,client_session_id,max(received_at) last_activity_at
+                  select site_id,client_visitor_id,client_session_id,max(received_at) last_activity_at
                   from raw_event
                   where site_id=? and received_at >= now() - (? * interval '1 minute')
                     and nullif(client_visitor_id,'') is not null and nullif(client_session_id,'') is not null
-                  group by client_visitor_id,client_session_id
+                  group by site_id,client_visitor_id,client_session_id
                   order by max(received_at) desc limit ?
                 ), session_events as (
                   select e.client_visitor_id,e.client_session_id,e.ingest_id,e.received_at,e.event_type,
-                    e.page_path,e.page_title,e.event_data,e.user_id_hash
+                    e.page_path,e.page_title,e.event_data,e.user_id_hash,e.client_ip
                   from raw_event e join active_sessions a on a.client_visitor_id=e.client_visitor_id
                     and a.client_session_id=e.client_session_id
                   where e.site_id=?
@@ -247,6 +262,19 @@ public class AnalyticsQueryService {
                     jsonb_agg(jsonb_build_object('at',received_at,'eventType',event_type,'path',page_path,'title',page_title)
                       order by received_at desc,ingest_id desc)::text actions_json
                   from ranked_actions where action_rank<=20 group by client_visitor_id,client_session_id
+                ), latest_ip as (
+                  select distinct on (client_visitor_id,client_session_id) client_visitor_id,client_session_id,host(client_ip) ip_address
+                  from session_events where client_ip is not null
+                  order by client_visitor_id,client_session_id,received_at desc,ingest_id desc
+                ), fingerprints as (
+                  select fo.client_visitor_id,fo.client_session_id,
+                    (array_agg(fo.fingerprint_key order by fo.observed_at desc,fo.id desc)
+                      filter(where fo.fingerprint_type='ja4'))[1] tls_key,
+                    (array_agg(fo.fingerprint_key order by fo.observed_at desc,fo.id desc)
+                      filter(where fo.fingerprint_type='browser'))[1] browser_key
+                  from fingerprint_observation fo join active_sessions a using(site_id,client_visitor_id,client_session_id)
+                    join site fs on fs.id=fo.site_id and fs.fingerprint_risk_enabled
+                  group by fo.client_visitor_id,fo.client_session_id
                 ), visit_context as (
                   select distinct on (client_visitor_id,client_session_id) client_visitor_id,client_session_id,
                     event_data->'context' context
@@ -276,13 +304,15 @@ public class AnalyticsQueryService {
                 select s.client_visitor_id,s.client_session_id,s.started_at,s.last_activity_at,s.event_count,s.page_views,
                   s.entry_page,l.event_type,l.page_path,l.page_title,c.context->>'countryCode',c.context->>'region',
                   c.context->>'city',c.context->>'browser',c.context->>'operatingSystem',c.context->>'deviceType',
-                  c.context->>'language',coalesce(a.actions_json,'[]'),s.identity_rank=1
+                  c.context->>'language',coalesce(a.actions_json,'[]'),s.identity_rank=1,i.ip_address,f.tls_key,f.browser_key
                 from ranked_sessions s join latest_event l using(client_visitor_id,client_session_id)
                   left join visit_context c using(client_visitor_id,client_session_id)
                   left join actions a using(client_visitor_id,client_session_id)
+                  left join latest_ip i using(client_visitor_id,client_session_id)
+                  left join fingerprints f using(client_visitor_id,client_session_id)
                 order by s.last_activity_at desc,s.client_visitor_id
                 """;
-        List<LiveVisitor> visitors = new ArrayList<>();
+        List<LiveVisitorRow> visitorRows = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setObject(1, site);
@@ -300,7 +330,7 @@ public class AnalyticsQueryService {
                     } catch (Exception invalidActions) {
                         actions = List.of();
                     }
-                    visitors.add(new LiveVisitor(
+                    visitorRows.add(new LiveVisitorRow(new LiveVisitor(
                             rows.getString(1),
                             rows.getString(2),
                             startedAt,
@@ -320,9 +350,23 @@ public class AnalyticsQueryService {
                             rows.getString(17),
                             Duration.between(startedAt, lastActivityAt).toMillis(),
                             actions,
-                            rows.getBoolean(19)));
+                            rows.getBoolean(19),
+                            rows.getString(20),
+                            null,
+                            null),
+                            rows.getString(21),
+                            rows.getString(22)));
                 }
             }
+            List<VisitorAssociationGroups.Signal> signals = visitorRows.stream()
+                    .map(row -> new VisitorAssociationGroups.Signal(
+                            row.visitor().visitorId() + "|" + row.visitor().sessionId(), row.tlsKey(), row.browserKey()))
+                    .toList();
+            Map<String, VisitorAssociationGroups.Labels> groups = VisitorAssociationGroups.assign(signals);
+            List<LiveVisitor> visitors = visitorRows.stream()
+                    .map(row -> row.visitor().withFingerprintGroups(groups.get(
+                            row.visitor().visitorId() + "|" + row.visitor().sessionId())))
+                    .toList();
             return visitors;
         } catch (SQLException error) {
             throw new IllegalStateException("Could not query realtime visitors", error);
@@ -391,6 +435,8 @@ public class AnalyticsQueryService {
 
     public record Range(LocalDate from, LocalDate to) {}
 
+    private record LiveVisitorRow(LiveVisitor visitor, String tlsKey, String browserKey) {}
+
     public record Overview(
             LocalDate from,
             LocalDate to,
@@ -454,7 +500,33 @@ public class AnalyticsQueryService {
             int fingerprintRelatedAccountCount,
             Instant fingerprintLastObservedAt,
             String fingerprintConfidence,
-            List<String> fingerprintEvidenceTypes) {
+            List<String> fingerprintEvidenceTypes,
+            String ipAddress,
+            String tlsFingerprintGroup,
+            String browserFingerprintGroup) {
+        VisitorLog withFingerprintGroups(VisitorAssociationGroups.Labels labels) {
+            return new VisitorLog(
+                    visitorId,
+                    startedAt,
+                    lastActivityAt,
+                    entryPage,
+                    exitPage,
+                    pageViews,
+                    events,
+                    durationMs,
+                    bounce,
+                    visitorType,
+                    fingerprintRiskLevel,
+                    fingerprintRelatedVisitorCount,
+                    fingerprintRelatedAccountCount,
+                    fingerprintLastObservedAt,
+                    fingerprintConfidence,
+                    fingerprintEvidenceTypes,
+                    ipAddress,
+                    labels == null ? null : labels.tlsFingerprintGroup(),
+                    labels == null ? null : labels.browserFingerprintGroup());
+        }
+
         public VisitorLog(
                 String visitorId,
                 Instant startedAt,
@@ -482,7 +554,10 @@ public class AnalyticsQueryService {
                     0,
                     null,
                     "none",
-                    List.of());
+                    List.of(),
+                    null,
+                    null,
+                    null);
         }
     }
 
@@ -538,7 +613,8 @@ public class AnalyticsQueryService {
             String referrerHost,
             String campaignSource,
             String campaignMedium,
-            String campaignName) {}
+            String campaignName,
+            String ipAddress) {}
 
     public record VisitorProfileAction(Instant at, String eventType, String path, String title, String sessionId) {}
 
@@ -581,5 +657,35 @@ public class AnalyticsQueryService {
             String language,
             long durationMs,
             List<LiveAction> actions,
-            boolean uniqueIdentity) {}
+            boolean uniqueIdentity,
+            String ipAddress,
+            String tlsFingerprintGroup,
+            String browserFingerprintGroup) {
+        LiveVisitor withFingerprintGroups(VisitorAssociationGroups.Labels labels) {
+            return new LiveVisitor(
+                    visitorId,
+                    sessionId,
+                    startedAt,
+                    lastActivityAt,
+                    events,
+                    pageViews,
+                    entryPage,
+                    lastEventType,
+                    currentPage,
+                    currentTitle,
+                    countryCode,
+                    region,
+                    city,
+                    browser,
+                    operatingSystem,
+                    deviceType,
+                    language,
+                    durationMs,
+                    actions,
+                    uniqueIdentity,
+                    ipAddress,
+                    labels == null ? null : labels.tlsFingerprintGroup(),
+                    labels == null ? null : labels.browserFingerprintGroup());
+        }
+    }
 }

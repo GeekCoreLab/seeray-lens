@@ -559,3 +559,10 @@ databaseChangeLog:
         - sqlFile:
             path: db/changelog/0080-ja4-fingerprint-risk.sql
             relativeToChangelogFile: false
+  - changeSet:
+      id: 0081-visitor-network-view
+      author: seeray
+      changes:
+        - sqlFile:
+            path: db/changelog/0081-visitor-network-view.sql
+            relativeToChangelogFile: false

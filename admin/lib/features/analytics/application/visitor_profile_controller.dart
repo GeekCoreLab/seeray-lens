@@ -20,6 +20,9 @@ class AnalyticsVisitorLogEntry {
     required this.fingerprintRelatedAccountCount,
     required this.fingerprintConfidence,
     required this.fingerprintEvidenceTypes,
+    required this.ipAddress,
+    required this.tlsFingerprintGroup,
+    required this.browserFingerprintGroup,
   });
 
   final String visitorId;
@@ -37,6 +40,9 @@ class AnalyticsVisitorLogEntry {
   final int fingerprintRelatedAccountCount;
   final String fingerprintConfidence;
   final List<String> fingerprintEvidenceTypes;
+  final String? ipAddress;
+  final String? tlsFingerprintGroup;
+  final String? browserFingerprintGroup;
 
   factory AnalyticsVisitorLogEntry.fromJson(
     Map<String, dynamic> json,
@@ -61,6 +67,9 @@ class AnalyticsVisitorLogEntry {
         (json['fingerprintEvidenceTypes'] as List? ?? const [])
             .whereType<String>()
             .toList(growable: false),
+    ipAddress: json['ipAddress'] as String?,
+    tlsFingerprintGroup: json['tlsFingerprintGroup'] as String?,
+    browserFingerprintGroup: json['browserFingerprintGroup'] as String?,
   );
 }
 
@@ -297,6 +306,7 @@ class AnalyticsVisitorProfileSession {
     required this.campaignSource,
     required this.campaignMedium,
     required this.campaignName,
+    required this.ipAddress,
   });
 
   final String sessionId;
@@ -320,6 +330,7 @@ class AnalyticsVisitorProfileSession {
   final String? campaignSource;
   final String? campaignMedium;
   final String? campaignName;
+  final String? ipAddress;
 
   factory AnalyticsVisitorProfileSession.fromJson(Map<String, dynamic> json) =>
       AnalyticsVisitorProfileSession(
@@ -346,6 +357,7 @@ class AnalyticsVisitorProfileSession {
         campaignSource: json['campaignSource'] as String?,
         campaignMedium: json['campaignMedium'] as String?,
         campaignName: json['campaignName'] as String?,
+        ipAddress: json['ipAddress'] as String?,
       );
 }
 

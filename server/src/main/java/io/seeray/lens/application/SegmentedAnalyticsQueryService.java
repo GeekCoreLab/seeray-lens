@@ -561,23 +561,45 @@ public class SegmentedAnalyticsQueryService {
         QueryContext context = context(siteId, range, segmentId);
         int limit = Math.max(1, Math.min(requestedLimit, 200));
         String sql = cte(context)
-                + " select client_visitor_id,started_at,last_activity_at,entry_page,exit_page,page_view_count,event_count,"
-                + "duration_ms,is_bounce,visitor_type from matching_sessions order by started_at desc limit ?";
-        return list(
+                + " select client_visitor_id,client_session_id,client_ip,started_at,last_activity_at,entry_page,exit_page,page_view_count,event_count,"
+                + "duration_ms,is_bounce,visitor_type,"
+                + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='ja4' order by o.observed_at desc limit 1),"
+                + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1)"
+                + " from matching_sessions order by started_at desc limit ?";
+        List<VisitorLogRow> rows = list(
                 context,
                 sql,
                 List.of(limit),
-                row -> new AnalyticsQueryService.VisitorLog(
-                        row.getString(1),
-                        row.getTimestamp(2).toInstant(),
-                        row.getTimestamp(3).toInstant(),
-                        row.getString(4),
-                        row.getString(5),
-                        row.getInt(6),
-                        row.getInt(7),
-                        row.getLong(8),
-                        row.getBoolean(9),
-                        row.getString(10)));
+                row -> new VisitorLogRow(
+                        new AnalyticsQueryService.VisitorLog(
+                                row.getString(1),
+                                row.getTimestamp(4).toInstant(),
+                                row.getTimestamp(5).toInstant(),
+                                row.getString(6),
+                                row.getString(7),
+                                row.getInt(8),
+                                row.getInt(9),
+                                row.getLong(10),
+                                row.getBoolean(11),
+                                row.getString(12),
+                                "none",
+                                0,
+                                0,
+                                null,
+                                "none",
+                                List.of(),
+                                row.getString(3),
+                                null,
+                                null),
+                        row.getString(13),
+                        row.getString(14),
+                        row.getString(1) + "|" + row.getString(2)));
+        Map<String, VisitorAssociationGroups.Labels> groups = VisitorAssociationGroups.assign(rows.stream()
+                .map(row -> new VisitorAssociationGroups.Signal(row.recordKey(), row.tlsKey(), row.browserKey()))
+                .toList());
+        return rows.stream()
+                .map(row -> row.entry().withFingerprintGroups(groups.get(row.recordKey())))
+                .toList();
     }
 
     public AnalyticsQueryService.VisitorProfile visitorProfile(
@@ -647,7 +669,7 @@ public class SegmentedAnalyticsQueryService {
                         + " select client_session_id,started_at,last_activity_at,entry_page,exit_page,page_view_count,"
                         + "event_count,duration_ms,is_bounce,visitor_type,browser,operating_system,device_type,language,"
                         + "country_code,region_name,city,initial_referrer_host,initial_utm_source,initial_utm_medium,"
-                        + "initial_utm_campaign from matching_sessions where " + profilePredicate + " "
+                        + "initial_utm_campaign,client_ip from matching_sessions where " + profilePredicate + " "
                         + "order by started_at desc,client_session_id limit ?",
                 withLimit(profileParameters, sessionLimit + 1),
                 row -> new AnalyticsQueryService.VisitorProfileSession(
@@ -671,7 +693,8 @@ public class SegmentedAnalyticsQueryService {
                         row.getString(18),
                         row.getString(19),
                         row.getString(20),
-                        row.getString(21)));
+                        row.getString(21),
+                        row.getString(22)));
         boolean hasMoreSessions = sessions.size() > sessionLimit;
         if (hasMoreSessions) sessions.remove(sessions.size() - 1);
         String nextSessionsCursor = hasMoreSessions
@@ -781,7 +804,7 @@ public class SegmentedAnalyticsQueryService {
                             + " select client_session_id,started_at,last_activity_at,entry_page,exit_page,page_view_count,"
                             + "event_count,duration_ms,is_bounce,visitor_type,browser,operating_system,device_type,language,"
                             + "country_code,region_name,city,initial_referrer_host,initial_utm_source,initial_utm_medium,"
-                            + "initial_utm_campaign from matching_sessions where " + profilePredicate
+                            + "initial_utm_campaign,client_ip from matching_sessions where " + profilePredicate
                             + sessionCursorPredicate
                             + " order by started_at desc,client_session_id limit ?",
                     sessionParameters,
@@ -904,6 +927,9 @@ public class SegmentedAnalyticsQueryService {
 
     private record VisitorIdentity(String status, String userIdHash) {}
 
+    private record VisitorLogRow(
+            AnalyticsQueryService.VisitorLog entry, String tlsKey, String browserKey, String recordKey) {}
+
     private static AnalyticsQueryService.VisitorProfileSession mapVisitorProfileSession(ResultSet row)
             throws SQLException {
         return new AnalyticsQueryService.VisitorProfileSession(
@@ -927,7 +953,8 @@ public class SegmentedAnalyticsQueryService {
                 row.getString(18),
                 row.getString(19),
                 row.getString(20),
-                row.getString(21));
+                row.getString(21),
+                row.getString(22));
     }
 
     public List<AnalyticsQueryService.Goal> goals(UUID siteId, AnalyticsQueryService.Range range, UUID segmentId) {
@@ -1154,7 +1181,7 @@ public class SegmentedAnalyticsQueryService {
     }
 
     private static String cte(QueryContext context) {
-        return "with matching_sessions as (select s.id,s.site_id,s.visitor_id,v.client_visitor_id,s.client_session_id,"
+        return "with matching_sessions as (select s.id,s.site_id,s.visitor_id,v.client_visitor_id,s.client_session_id,host(s.client_ip) client_ip,"
                 + "s.started_at,s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,"
                 + "s.entry_page,s.exit_page,s.entry_page_title,s.exit_page_title,s.initial_referrer_host,s.initial_page_host,s.initial_utm_source,"
                 + "s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,s.browser,s.browser_version,s.operating_system,"

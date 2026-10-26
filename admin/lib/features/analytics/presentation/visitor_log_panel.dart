@@ -7,6 +7,7 @@ import '../application/analytics_controller.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
 import '../application/visitor_profile_controller.dart';
+import 'visitor_association_controls.dart';
 
 class VisitorLogPanel extends ConsumerStatefulWidget {
   const VisitorLogPanel({required this.siteId, super.key});
@@ -19,6 +20,8 @@ class VisitorLogPanel extends ConsumerStatefulWidget {
 
 class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
   final _search = TextEditingController();
+  VisitorAssociationView _associationView = VisitorAssociationView.ip;
+  bool _aggregate = false;
 
   @override
   void dispose() {
@@ -67,12 +70,20 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
             const SizedBox(height: 4),
             Text(
               context.tr(
-                'Search site-scoped anonymous visits, then open a visitor profile to inspect the selected period. Raw IP addresses are not retained.',
-                '搜索站点内的匿名访问记录，并打开访客画像查看所选周期。系统不会留存原始 IP 地址。',
+                'Search visits, then open a profile to inspect the selected period. IP addresses follow a 30-day retention policy and are cleared by the daily cleanup.',
+                '搜索访问记录并打开访客画像查看所选周期。IP 地址按 30 天策略保留，并由每日清理任务删除。',
               ),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
+            VisitorAssociationControls(
+              view: _associationView,
+              onViewChanged: (value) =>
+                  setState(() => _associationView = value),
+              aggregate: _aggregate,
+              onAggregateChanged: (value) => setState(() => _aggregate = value),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: _search,
               onChanged: (_) => setState(() {}),
@@ -80,8 +91,8 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                 isDense: true,
                 prefixIcon: const Icon(Icons.search),
                 hintText: context.tr(
-                  'Filter by visitor ID or page',
-                  '按访客 ID 或页面筛选',
+                  'Filter by selected signal or page',
+                  '按当前查看方式或页面筛选',
                 ),
                 suffixIcon: _search.text.isEmpty
                     ? null
@@ -118,7 +129,14 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                 final filtered = items
                     .where((item) {
                       if (needle.isEmpty) return true;
-                      return item.visitorId.toLowerCase().contains(needle) ||
+                      return visitorAssociationValue(
+                            context,
+                            _associationView,
+                            ipAddress: item.ipAddress,
+                            tlsFingerprintGroup: item.tlsFingerprintGroup,
+                            browserFingerprintGroup:
+                                item.browserFingerprintGroup,
+                          ).toLowerCase().contains(needle) ||
                           (item.entryPage ?? '').toLowerCase().contains(
                             needle,
                           ) ||
@@ -143,10 +161,33 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                     ),
                   );
                 }
+                final groups = visitorAssociationGroups(
+                  records: filtered,
+                  aggregate: _aggregate,
+                  visitorId: (item) => item.visitorId,
+                  associationKey: (item) => switch (_associationView) {
+                    VisitorAssociationView.ip => item.ipAddress,
+                    VisitorAssociationView.tls => item.tlsFingerprintGroup,
+                    VisitorAssociationView.browser =>
+                      item.browserFingerprintGroup,
+                  },
+                );
                 return Column(
                   children: [
-                    for (final item in filtered)
-                      _VisitorVisitTile(siteId: widget.siteId, entry: item),
+                    for (var index = 0; index < groups.length; index++)
+                      if (_aggregate && groups[index].length > 1)
+                        _VisitorVisitGroup(
+                          siteId: widget.siteId,
+                          index: index + 1,
+                          entries: groups[index],
+                          view: _associationView,
+                        )
+                      else
+                        _VisitorVisitTile(
+                          siteId: widget.siteId,
+                          entry: groups[index].first,
+                          view: _associationView,
+                        ),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Padding(
@@ -172,16 +213,18 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
 }
 
 class _VisitorVisitTile extends StatelessWidget {
-  const _VisitorVisitTile({required this.siteId, required this.entry});
+  const _VisitorVisitTile({
+    required this.siteId,
+    required this.entry,
+    required this.view,
+  });
 
   final String siteId;
   final AnalyticsVisitorLogEntry entry;
+  final VisitorAssociationView view;
 
   @override
   Widget build(BuildContext context) {
-    final shortId = entry.visitorId.length > 12
-        ? '${entry.visitorId.substring(0, 8)}…${entry.visitorId.substring(entry.visitorId.length - 4)}'
-        : entry.visitorId;
     final path = [entry.entryPage, entry.exitPage]
         .whereType<String>()
         .where((value) => value.isNotEmpty)
@@ -200,7 +243,13 @@ class _VisitorVisitTile extends StatelessWidget {
           ),
         ),
         title: Text(
-          '${context.tr('Visitor', '访客')} $shortId',
+          visitorAssociationValue(
+            context,
+            view,
+            ipAddress: entry.ipAddress,
+            tlsFingerprintGroup: entry.tlsFingerprintGroup,
+            browserFingerprintGroup: entry.browserFingerprintGroup,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -252,4 +301,36 @@ class _VisitorVisitTile extends StatelessWidget {
   }
 
   String _date(DateTime value) => value.toString().substring(0, 16);
+}
+
+class _VisitorVisitGroup extends StatelessWidget {
+  const _VisitorVisitGroup({
+    required this.siteId,
+    required this.index,
+    required this.entries,
+    required this.view,
+  });
+
+  final String siteId;
+  final int index;
+  final List<AnalyticsVisitorLogEntry> entries;
+  final VisitorAssociationView view;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(top: 8),
+    clipBehavior: Clip.antiAlias,
+    child: ExpansionTile(
+      leading: const CircleAvatar(child: Icon(Icons.hub_outlined)),
+      title: Text(context.tr('Possible related group $index', '疑似关联组 $index')),
+      subtitle: Text(
+        context.tr('${entries.length} visits', '${entries.length} 次访问'),
+      ),
+      childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      children: [
+        for (final entry in entries)
+          _VisitorVisitTile(siteId: siteId, entry: entry, view: view),
+      ],
+    ),
+  );
 }

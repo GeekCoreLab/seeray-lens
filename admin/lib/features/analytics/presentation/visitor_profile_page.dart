@@ -45,9 +45,9 @@ class VisitorProfilePage extends ConsumerWidget {
                 englishTitle: 'Visitor profile',
                 chineseTitle: '访客画像说明',
                 englishBody:
-                    'Profiles use anonymous IDs scoped to this site. If the site sends a consented opaque User ID, browser profiles can be linked for this timeline. Conflicting IDs on one browser are kept separate. Lifetime first/last seen and visit totals are shown separately from details filtered to the selected date range and saved audience. Raw IP addresses and arbitrary event properties are not exposed.',
+                    'Profiles use anonymous IDs scoped to this site. If the site sends a consented opaque User ID, browser profiles can be linked for this timeline. Conflicting IDs on one browser are kept separate. IP addresses follow a 30-day retention policy; arbitrary event properties are not exposed.',
                 chineseBody:
-                    '画像使用当前站点范围内的匿名 ID；站点在取得同意后发送不含个人信息的 User ID 时，可关联多个浏览器档案。同一浏览器出现冲突 ID 时会保持分离。首次/最近出现时间和累计访问数与所选日期及分群筛选的明细分开展示；不会暴露原始 IP 或任意事件属性。',
+                    '画像使用当前站点范围内的匿名 ID；站点在取得同意后发送不含个人信息的 User ID 时，可关联多个浏览器档案。同一浏览器出现冲突 ID 时会保持分离。IP 地址按 30 天策略保留；不会暴露任意事件属性。',
               ),
               onRefresh: () =>
                   ref.invalidate(analyticsVisitorProfileProvider(query)),
@@ -115,11 +115,6 @@ class _ProfileError extends StatelessWidget {
                     child: Text(context.tr('Retry', '重试')),
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              SelectableText(
-                visitorId,
-                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),
@@ -253,9 +248,13 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
   Widget build(BuildContext context) {
     final profile = widget.profile;
     final siteId = widget.siteId;
-    final shortId = profile.visitorId.length > 20
-        ? '${profile.visitorId.substring(0, 12)}…${profile.visitorId.substring(profile.visitorId.length - 6)}'
-        : profile.visitorId;
+    String? latestIpAddress;
+    for (final session in profile.sessions) {
+      if (session.ipAddress != null && session.ipAddress!.isNotEmpty) {
+        latestIpAddress = session.ipAddress;
+        break;
+      }
+    }
     final bounceRate = profile.rangeSessions == 0
         ? 0.0
         : profile.rangeBouncedSessions / profile.rangeSessions * 100;
@@ -290,7 +289,14 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 3),
-                      SelectableText(shortId),
+                      Text(
+                        context.tr('IP address', 'IP 地址'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      SelectableText(
+                        latestIpAddress ??
+                            context.tr('IP unavailable', 'IP 暂不可用'),
+                      ),
                       if (profile.fingerprintRiskLevel != 'none')
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
@@ -317,22 +323,23 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: context.tr('Copy anonymous ID', '复制匿名 ID'),
-                  onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: profile.visitorId),
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(context.tr('ID copied', '已复制 ID')),
-                        ),
+                if (latestIpAddress != null)
+                  IconButton(
+                    tooltip: context.tr('Copy IP address', '复制 IP 地址'),
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: latestIpAddress!),
                       );
-                    }
-                  },
-                  icon: const Icon(Icons.copy_outlined),
-                ),
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(context.tr('IP copied', '已复制 IP')),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy_outlined),
+                  ),
               ],
             ),
           ),
@@ -465,8 +472,8 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
         const SizedBox(height: 20),
         Text(
           context.tr(
-            'Visitor IDs are anonymous and site-scoped. First/last seen and lifetime visit totals are retained separately; visit details above follow the selected date range and audience.',
-            '访客 ID 为匿名且仅限当前站点。首次/最近出现时间和累计访问数单独保留；上方访问明细遵循所选日期范围和分群。',
+            'Visitor profiles are scoped to this site. First/last seen and lifetime visit totals are retained separately; visit details above follow the selected date range and audience.',
+            '访客画像仅限当前站点。首次/最近出现时间和累计访问数单独保留；上方访问明细遵循所选日期范围和分群。',
           ),
           style: Theme.of(context).textTheme.bodySmall,
         ),
@@ -649,6 +656,11 @@ class _VisitCard extends StatelessWidget {
                     ),
                   ),
                 if (visit.language != null) _InfoChip(text: visit.language!),
+                if (visit.ipAddress != null)
+                  _InfoChip(
+                    text: '${context.tr('IP', 'IP')}: ${visit.ipAddress}',
+                    leading: const Icon(Icons.lan_outlined, size: 17),
+                  ),
                 if (location.isNotEmpty)
                   _InfoChip(
                     text: location,
