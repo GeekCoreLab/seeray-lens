@@ -40,7 +40,9 @@ public class SiteResource {
                 r.rawRetentionDays,
                 r.aggregateRetentionDays,
                 r.fingerprintRiskEnabled,
-                r.fingerprintRetentionDays));
+                r.fingerprintRetentionDays,
+                r.ipLookupMode,
+                r.ipLookupHeader));
     }
 
     @DELETE
@@ -63,7 +65,9 @@ public class SiteResource {
                 s.rawRetentionDays,
                 s.aggregateRetentionDays,
                 s.fingerprintRiskEnabled,
-                s.fingerprintRetentionDays);
+                s.fingerprintRetentionDays,
+                s.ipLookupMode,
+                s.ipLookupHeader);
     }
 
     static DomainDto domain(SiteAllowedDomain d) {
@@ -78,7 +82,9 @@ public class SiteResource {
             Integer rawRetentionDays,
             Integer aggregateRetentionDays,
             Boolean fingerprintRiskEnabled,
-            Integer fingerprintRetentionDays) {}
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {}
 
     public record SitePatch(
             String name,
@@ -89,7 +95,9 @@ public class SiteResource {
             Integer rawRetentionDays,
             Integer aggregateRetentionDays,
             Boolean fingerprintRiskEnabled,
-            Integer fingerprintRetentionDays) {}
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {}
 
     public record SiteDto(
             UUID id,
@@ -103,7 +111,9 @@ public class SiteResource {
             int rawRetentionDays,
             int aggregateRetentionDays,
             boolean fingerprintRiskEnabled,
-            int fingerprintRetentionDays) {}
+            int fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {}
 
     public record DomainRequest(@NotBlank String host, boolean allowSubdomains, boolean enabled) {}
 

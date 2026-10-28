@@ -202,6 +202,17 @@ class _SiteFormDialogState extends State<_SiteFormDialog> {
   final _raw = TextEditingController(text: '30');
   final _aggregate = TextEditingController(text: '730');
   bool _requireConsent = false;
+  static const _ipHeaderPresets = [
+    'X-Forwarded-For',
+    'X-Real-IP',
+    'CF-Connecting-IP',
+    'True-Client-IP',
+    'Fastly-Client-IP',
+    'X-Client-IP',
+  ];
+  String _ipLookupMode = 'DEFAULT';
+  String _headerPreset = 'X-Forwarded-For';
+  final _customHeader = TextEditingController();
 
   @override
   void dispose() {
@@ -210,6 +221,7 @@ class _SiteFormDialogState extends State<_SiteFormDialog> {
     _language.dispose();
     _raw.dispose();
     _aggregate.dispose();
+    _customHeader.dispose();
     super.dispose();
   }
 
@@ -263,6 +275,58 @@ class _SiteFormDialogState extends State<_SiteFormDialog> {
             const Text(
               'Raw events are automatically deleted after this period. Aggregated reports and session facts follow the aggregate period; event-level drilldowns and custom dimensions may be incomplete outside the raw window.',
             ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _ipLookupMode,
+              decoration: const InputDecoration(labelText: 'IP acquisition method'),
+              items: const [
+                DropdownMenuItem(value: 'DEFAULT', child: Text('System default (environment)')),
+                DropdownMenuItem(value: 'NETWORK', child: Text('Network connection (peer IP)')),
+                DropdownMenuItem(value: 'HEADER', child: Text('HTTP request header')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _ipLookupMode = value);
+                }
+              },
+            ),
+            if (_ipLookupMode == 'HEADER') ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _headerPreset,
+                decoration: const InputDecoration(labelText: 'HTTP header preset'),
+                items: [
+                  for (final preset in _ipHeaderPresets)
+                    DropdownMenuItem(value: preset, child: Text(preset)),
+                  const DropdownMenuItem(value: 'CUSTOM', child: Text('Custom header…')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _headerPreset = value);
+                  }
+                },
+              ),
+              if (_headerPreset == 'CUSTOM') ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _customHeader,
+                  decoration: const InputDecoration(
+                    labelText: 'Custom header name',
+                    hintText: 'e.g. X-Custom-Client-IP',
+                  ),
+                  validator: (val) {
+                    if (_ipLookupMode == 'HEADER' && _headerPreset == 'CUSTOM') {
+                      final trimmed = val?.trim() ?? '';
+                      if (trimmed.isEmpty) return 'Header name is required';
+                      if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(trimmed)) {
+                        return 'Invalid header name';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ],
           ],
         ),
       ),
@@ -284,6 +348,12 @@ class _SiteFormDialogState extends State<_SiteFormDialog> {
             'requireConsent': _requireConsent,
             'rawRetentionDays': int.parse(_raw.text),
             'aggregateRetentionDays': int.parse(_aggregate.text),
+            'ipLookupMode': _ipLookupMode,
+            'ipLookupHeader': _ipLookupMode == 'HEADER'
+                ? (_headerPreset == 'CUSTOM'
+                    ? _customHeader.text.trim()
+                    : _headerPreset)
+                : null,
           });
         },
         child: const Text('Create'),

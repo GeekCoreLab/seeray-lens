@@ -1013,6 +1013,92 @@ class ControlPlaneResourceTest {
     }
 
     @Test
+    void siteIpLookupConfigurationCanBeSetAndUpdated() {
+        Tokens owner = register("siteiplookup" + System.nanoTime() + "@example.test");
+        String workspaceId = workspace(owner.access()).extract().path("[0].id");
+
+        // 1. Create with default IP lookup mode
+        var site = given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"name\":\"IP Test Site\",\"timezone\":\"UTC\"}")
+                .post("/api/v1/workspaces/" + workspaceId + "/sites")
+                .then()
+                .statusCode(201)
+                .body("ipLookupMode", is("DEFAULT"))
+                .body("ipLookupHeader", nullValue())
+                .extract();
+        String siteId = site.path("id");
+        String path = "/api/v1/sites/" + siteId;
+
+        // 2. Patch to NETWORK mode (network connection peer IP)
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"ipLookupMode\":\"NETWORK\"}")
+                .patch(path)
+                .then()
+                .statusCode(200)
+                .body("ipLookupMode", is("NETWORK"))
+                .body("ipLookupHeader", nullValue());
+
+        // 3. Patch to HEADER mode with preset header
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"ipLookupMode\":\"HEADER\",\"ipLookupHeader\":\"X-Forwarded-For\"}")
+                .patch(path)
+                .then()
+                .statusCode(200)
+                .body("ipLookupMode", is("HEADER"))
+                .body("ipLookupHeader", is("X-Forwarded-For"));
+
+        // 4. Patch to HEADER mode with custom header
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"ipLookupMode\":\"HEADER\",\"ipLookupHeader\":\"X-Custom-Client-IP\"}")
+                .patch(path)
+                .then()
+                .statusCode(200)
+                .body("ipLookupMode", is("HEADER"))
+                .body("ipLookupHeader", is("X-Custom-Client-IP"));
+
+        // 5. Invalid mode returns 400
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"ipLookupMode\":\"INVALID_MODE\"}")
+                .patch(path)
+                .then()
+                .statusCode(400);
+
+        // 6. HEADER mode without header returns 400
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"ipLookupMode\":\"HEADER\",\"ipLookupHeader\":\"\"}")
+                .patch(path)
+                .then()
+                .statusCode(400);
+
+        // 7. Switching to NETWORK clears header
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"ipLookupMode\":\"NETWORK\"}")
+                .patch(path)
+                .then()
+                .statusCode(200)
+                .body("ipLookupMode", is("NETWORK"))
+                .body("ipLookupHeader", nullValue());
+
+        // 8. Create another site specifying HEADER mode directly
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body(
+                        "{\"name\":\"Direct Header Site\",\"timezone\":\"UTC\",\"ipLookupMode\":\"HEADER\",\"ipLookupHeader\":\"CF-Connecting-IP\"}")
+                .post("/api/v1/workspaces/" + workspaceId + "/sites")
+                .then()
+                .statusCode(201)
+                .body("ipLookupMode", is("HEADER"))
+                .body("ipLookupHeader", is("CF-Connecting-IP"));
+    }
+
+    @Test
     void analyticsAnnotationsAreSiteScopedDateFilteredAndEditable() {
         Tokens owner = register("annotations" + System.nanoTime() + "@example.test");
         String workspaceId = workspace(owner.access()).extract().path("[0].id");

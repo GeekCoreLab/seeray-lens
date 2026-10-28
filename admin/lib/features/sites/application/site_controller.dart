@@ -18,6 +18,8 @@ class Site {
     this.fingerprintRetentionDays = 30,
     required this.rawRetentionDays,
     required this.aggregateRetentionDays,
+    this.ipLookupMode = 'DEFAULT',
+    this.ipLookupHeader,
   });
 
   final String id;
@@ -32,6 +34,8 @@ class Site {
   final int fingerprintRetentionDays;
   final int rawRetentionDays;
   final int aggregateRetentionDays;
+  final String ipLookupMode;
+  final String? ipLookupHeader;
 
   factory Site.fromJson(Map<String, dynamic> json) => Site(
     id: json['id'] as String,
@@ -46,6 +50,8 @@ class Site {
     fingerprintRetentionDays: json['fingerprintRetentionDays'] as int? ?? 30,
     rawRetentionDays: json['rawRetentionDays'] as int,
     aggregateRetentionDays: json['aggregateRetentionDays'] as int,
+    ipLookupMode: json['ipLookupMode'] as String? ?? 'DEFAULT',
+    ipLookupHeader: json['ipLookupHeader'] as String?,
   );
 }
 

@@ -447,11 +447,22 @@ describe('tracker package', () => {
     tracker.track('signup');
     await tracker.flush();
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[1].credentials).toBe('include');
     const envelope = JSON.parse(call[1].body as string);
     expect(envelope.schemaVersion).toBe(1);
     expect(envelope.siteId).toBe('srl_public');
     expect(envelope.events).toHaveLength(2);
     expect(envelope.events[0].eventId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('supports custom request credentials mode', async () => {
+    vi.stubGlobal('navigator', { doNotTrack: '0' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }));
+    const tracker = new Tracker({ siteId: 'srl_credentials', endpoint: '/api/v1/collect', credentials: 'omit' });
+    tracker.track('page_view');
+    await tracker.flush();
+    const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[1].credentials).toBe('omit');
   });
 
   it('tracks explicit site searches with normalized terms and known zero results', async () => {

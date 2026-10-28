@@ -8,10 +8,15 @@
   const tagManagerPreview = previewSessionId && previewToken
     ? { sessionId: previewSessionId, token: previewToken }
     : undefined;
+  const rawCredentials = script.getAttribute('data-credentials');
+  const credentials = rawCredentials === 'omit' || rawCredentials === 'same-origin' || rawCredentials === 'include'
+    ? rawCredentials
+    : 'include';
   globalThis.SeeRay = globalThis.SeeRayLens.SeeRay;
   globalThis.SeeRayLens.init({
     siteId,
     apiOrigin,
+    credentials,
     requireConsent: script.getAttribute('data-require-consent') === 'true',
     fingerprintRisk: script.getAttribute('data-fingerprint-risk') === 'true',
     tagManager: tagManagerPreview !== undefined || script.getAttribute('data-tag-manager') === 'true',

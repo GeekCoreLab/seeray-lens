@@ -42,7 +42,9 @@ public class WorkspaceSiteResource {
                 request.aggregateRetentionDays(),
                 request.requireConsent(),
                 request.fingerprintRiskEnabled(),
-                request.fingerprintRetentionDays());
+                request.fingerprintRetentionDays(),
+                request.ipLookupMode(),
+                request.ipLookupHeader());
         audit.record(workspaceId, access.userId(), "CREATE_SITE", "site", site.id);
         return Response.status(Response.Status.CREATED)
                 .entity(SiteResource.dto(site))

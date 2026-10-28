@@ -19,7 +19,9 @@ public class SiteService {
     private final HeatmapFileCleanupService heatmapFileCleanup;
 
     public SiteService(
-            WorkspaceAccess access, SystemAdminAccess systemAdmin, SystemAdminAuditRecorder adminAudit,
+            WorkspaceAccess access,
+            SystemAdminAccess systemAdmin,
+            SystemAdminAuditRecorder adminAudit,
             HeatmapFileCleanupService heatmapFileCleanup) {
         this.access = access;
         this.systemAdmin = systemAdmin;
@@ -29,22 +31,116 @@ public class SiteService {
 
     @Transactional
     public Site createForSystemAdmin(
-            UUID workspaceId, String name, String timezone, String language, Integer raw, Integer aggregate,
-            Boolean requireConsent, Boolean fingerprintRiskEnabled, Integer fingerprintRetentionDays) {
+            UUID workspaceId,
+            String name,
+            String timezone,
+            String language,
+            Integer raw,
+            Integer aggregate,
+            Boolean requireConsent,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays) {
+        return createForSystemAdmin(
+                workspaceId,
+                name,
+                timezone,
+                language,
+                raw,
+                aggregate,
+                requireConsent,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                null,
+                null);
+    }
+
+    @Transactional
+    public Site createForSystemAdmin(
+            UUID workspaceId,
+            String name,
+            String timezone,
+            String language,
+            Integer raw,
+            Integer aggregate,
+            Boolean requireConsent,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {
         Organization organization = Organization.findById(workspaceId);
-        if (organization == null)
-            throw new ControlPlaneException(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
-        return save(null, organization, name, timezone, language, true, requireConsent, raw, aggregate,
-                fingerprintRiskEnabled, fingerprintRetentionDays);
+        if (organization == null) throw new ControlPlaneException(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
+        return save(
+                null,
+                organization,
+                name,
+                timezone,
+                language,
+                true,
+                requireConsent,
+                raw,
+                aggregate,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                ipLookupMode,
+                ipLookupHeader);
     }
 
     @Transactional
     public Site updateForSystemAdmin(
-            UUID id, String name, String timezone, String language, Boolean enabled, Boolean requireConsent,
-            Integer raw, Integer aggregate, Boolean fingerprintRiskEnabled, Integer fingerprintRetentionDays) {
+            UUID id,
+            String name,
+            String timezone,
+            String language,
+            Boolean enabled,
+            Boolean requireConsent,
+            Integer raw,
+            Integer aggregate,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays) {
+        return updateForSystemAdmin(
+                id,
+                name,
+                timezone,
+                language,
+                enabled,
+                requireConsent,
+                raw,
+                aggregate,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                null,
+                null);
+    }
+
+    @Transactional
+    public Site updateForSystemAdmin(
+            UUID id,
+            String name,
+            String timezone,
+            String language,
+            Boolean enabled,
+            Boolean requireConsent,
+            Integer raw,
+            Integer aggregate,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {
         Site site = site(id);
-        return save(site, site.organization, name, timezone, language, enabled, requireConsent, raw, aggregate,
-                fingerprintRiskEnabled, fingerprintRetentionDays);
+        return save(
+                site,
+                site.organization,
+                name,
+                timezone,
+                language,
+                enabled,
+                requireConsent,
+                raw,
+                aggregate,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                ipLookupMode,
+                ipLookupHeader);
     }
 
     @Transactional
@@ -65,9 +161,48 @@ public class SiteService {
             Boolean requireConsent,
             Boolean fingerprintRiskEnabled,
             Integer fingerprintRetentionDays) {
+        return create(
+                workspace,
+                name,
+                timezone,
+                language,
+                raw,
+                aggregate,
+                requireConsent,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                null,
+                null);
+    }
+
+    @Transactional
+    public Site create(
+            UUID workspace,
+            String name,
+            String timezone,
+            String language,
+            Integer raw,
+            Integer aggregate,
+            Boolean requireConsent,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {
         OrganizationMember m = access.require(workspace, WorkspaceRole.OWNER, WorkspaceRole.ADMIN);
-        return save(null, m.organization, name, timezone, language, true, requireConsent, raw, aggregate,
-                fingerprintRiskEnabled, fingerprintRetentionDays);
+        return save(
+                null,
+                m.organization,
+                name,
+                timezone,
+                language,
+                true,
+                requireConsent,
+                raw,
+                aggregate,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                ipLookupMode,
+                ipLookupHeader);
     }
 
     @Transactional
@@ -82,10 +217,51 @@ public class SiteService {
             Integer aggregate,
             Boolean fingerprintRiskEnabled,
             Integer fingerprintRetentionDays) {
+        return update(
+                id,
+                name,
+                timezone,
+                language,
+                enabled,
+                requireConsent,
+                raw,
+                aggregate,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                null,
+                null);
+    }
+
+    @Transactional
+    public Site update(
+            UUID id,
+            String name,
+            String timezone,
+            String language,
+            Boolean enabled,
+            Boolean requireConsent,
+            Integer raw,
+            Integer aggregate,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {
         Site s = site(id);
         requireSiteAdmin(s);
-        Site updated = save(s, s.organization, name, timezone, language, enabled, requireConsent, raw, aggregate,
-                fingerprintRiskEnabled, fingerprintRetentionDays);
+        Site updated = save(
+                s,
+                s.organization,
+                name,
+                timezone,
+                language,
+                enabled,
+                requireConsent,
+                raw,
+                aggregate,
+                fingerprintRiskEnabled,
+                fingerprintRetentionDays,
+                ipLookupMode,
+                ipLookupHeader);
         if (systemAdmin.isSystemAdmin()) adminAudit.record(access.userId(), null, id, "UPDATE_SITE");
         return updated;
     }
@@ -105,7 +281,8 @@ public class SiteService {
     public void delete(UUID id) {
         Site s = site(id);
         if (systemAdmin.isSystemAdmin())
-            throw new ControlPlaneException(409, "SITE_DELETE_CONFIRMATION_REQUIRED", "Use the system administration deletion endpoint");
+            throw new ControlPlaneException(
+                    409, "SITE_DELETE_CONFIRMATION_REQUIRED", "Use the system administration deletion endpoint");
         requireSiteAdmin(s);
         heatmapFileCleanup.queueSite(id);
         s.delete();
@@ -174,7 +351,9 @@ public class SiteService {
             Integer raw,
             Integer aggregate,
             Boolean fingerprintRiskEnabled,
-            Integer fingerprintRetentionDays) {
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {
         if (name == null || name.isBlank()) throw new ControlPlaneException(400, "INVALID_SITE", "Name is required");
         try {
             ZoneId.of(timezone);
@@ -200,24 +379,63 @@ public class SiteService {
         s.defaultLanguage = language == null || language.isBlank() ? "en" : language;
         s.trackingEnabled = enabled == null ? (s == null || s.trackingEnabled) : enabled;
         s.requireConsent = requireConsent == null ? (newSite ? false : s.requireConsent) : requireConsent;
-        s.fingerprintRiskEnabled = fingerprintRiskEnabled == null
-                ? (newSite ? false : s.fingerprintRiskEnabled)
-                : fingerprintRiskEnabled;
+        s.fingerprintRiskEnabled =
+                fingerprintRiskEnabled == null ? (newSite ? false : s.fingerprintRiskEnabled) : fingerprintRiskEnabled;
         int fingerprintRetention = fingerprintRetentionDays == null
                 ? (newSite ? 30 : s.fingerprintRetentionDays)
                 : fingerprintRetentionDays;
         if (fingerprintRetention < 1 || fingerprintRetention > 365)
-            throw new ControlPlaneException(400, "INVALID_FINGERPRINT_RETENTION", "Fingerprint retention must be between 1 and 365 days");
+            throw new ControlPlaneException(
+                    400, "INVALID_FINGERPRINT_RETENTION", "Fingerprint retention must be between 1 and 365 days");
         s.fingerprintRetentionDays = fingerprintRetention;
         s.rawRetentionDays = r;
         s.aggregateRetentionDays = a;
+
+        if (ipLookupMode != null && !ipLookupMode.isBlank()) {
+            String mode = ipLookupMode.trim().toUpperCase(Locale.ROOT);
+            if (!Set.of("DEFAULT", "NETWORK", "HEADER").contains(mode)) {
+                throw new ControlPlaneException(
+                        400, "INVALID_IP_LOOKUP_MODE", "IP lookup mode must be DEFAULT, NETWORK, or HEADER");
+            }
+            s.ipLookupMode = mode;
+            if ("HEADER".equals(mode)) {
+                String header = ipLookupHeader == null ? null : ipLookupHeader.trim();
+                if (header == null || header.isBlank()) {
+                    throw new ControlPlaneException(
+                            400, "INVALID_IP_LOOKUP_HEADER", "IP lookup header is required when mode is HEADER");
+                }
+                if (header.length() > 128 || !header.matches("[A-Za-z0-9_-]+")) {
+                    throw new ControlPlaneException(
+                            400,
+                            "INVALID_IP_LOOKUP_HEADER",
+                            "IP lookup header must be a valid HTTP header name up to 128 characters");
+                }
+                s.ipLookupHeader = header;
+            } else {
+                s.ipLookupHeader = null;
+            }
+        } else if (newSite) {
+            s.ipLookupMode = "DEFAULT";
+            s.ipLookupHeader = null;
+        } else if ("HEADER".equals(s.ipLookupMode) && ipLookupHeader != null) {
+            String header = ipLookupHeader.trim();
+            if (header.isBlank() || header.length() > 128 || !header.matches("[A-Za-z0-9_-]+")) {
+                throw new ControlPlaneException(
+                        400,
+                        "INVALID_IP_LOOKUP_HEADER",
+                        "IP lookup header must be a valid HTTP header name up to 128 characters");
+            }
+            s.ipLookupHeader = header;
+        }
+
         s.updatedAt = now;
         if (newSite) s.persist();
         return s;
     }
 
     private void requireSiteAdmin(Site site) {
-        if (!systemAdmin.isSystemAdmin()) access.require(site.organization.id, WorkspaceRole.OWNER, WorkspaceRole.ADMIN);
+        if (!systemAdmin.isSystemAdmin())
+            access.require(site.organization.id, WorkspaceRole.OWNER, WorkspaceRole.ADMIN);
     }
 
     static String normalize(String input) {

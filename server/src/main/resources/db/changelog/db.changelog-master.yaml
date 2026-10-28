@@ -566,3 +566,10 @@ databaseChangeLog:
         - sqlFile:
             path: db/changelog/0081-visitor-network-view.sql
             relativeToChangelogFile: false
+  - changeSet:
+      id: 0082-site-ip-lookup
+      author: seeray
+      changes:
+        - sqlFile:
+            path: db/changelog/0082-site-ip-lookup.sql
+            relativeToChangelogFile: false

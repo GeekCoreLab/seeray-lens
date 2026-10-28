@@ -19,7 +19,8 @@ import java.util.*;
 
 @ApplicationScoped
 public class SystemAdminService {
-    private static final String TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+    private static final String TEMP_PASSWORD_ALPHABET =
+            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
     private final SystemAdminAccess access;
     private final SystemAdminAuditRecorder audit;
     private final SiteService sites;
@@ -35,7 +36,9 @@ public class SystemAdminService {
 
     public Page<UserDto> users(int page, int size) {
         access.require();
-        List<AppUser> rows = AppUser.<AppUser>find("order by createdAt desc, id desc").page(page, size).list();
+        List<AppUser> rows = AppUser.<AppUser>find("order by createdAt desc, id desc")
+                .page(page, size)
+                .list();
         return new Page<>(rows.stream().map(this::userDto).toList(), page, size, AppUser.count());
     }
 
@@ -121,7 +124,9 @@ public class SystemAdminService {
 
     public Page<SiteResource.SiteDto> sites(int page, int size) {
         access.require();
-        List<Site> rows = Site.<Site>find("order by createdAt desc, id desc").page(page, size).list();
+        List<Site> rows = Site.<Site>find("order by createdAt desc, id desc")
+                .page(page, size)
+                .list();
         return new Page<>(rows.stream().map(SiteResource::dto).toList(), page, size, Site.count());
     }
 
@@ -129,9 +134,18 @@ public class SystemAdminService {
     public SiteResource.SiteDto createSite(CreateSite request) {
         if (request == null) throw new ControlPlaneException(400, "INVALID_SITE", "Site details are required");
         UUID actorId = access.require();
-        Site site = sites.createForSystemAdmin(request.workspaceId(), request.name(), request.timezone(),
-                request.defaultLanguage(), request.rawRetentionDays(), request.aggregateRetentionDays(),
-                request.requireConsent(), request.fingerprintRiskEnabled(), request.fingerprintRetentionDays());
+        Site site = sites.createForSystemAdmin(
+                request.workspaceId(),
+                request.name(),
+                request.timezone(),
+                request.defaultLanguage(),
+                request.rawRetentionDays(),
+                request.aggregateRetentionDays(),
+                request.requireConsent(),
+                request.fingerprintRiskEnabled(),
+                request.fingerprintRetentionDays(),
+                request.ipLookupMode(),
+                request.ipLookupHeader());
         audit.record(actorId, null, site.id, "CREATE_SITE");
         return SiteResource.dto(site);
     }
@@ -140,9 +154,19 @@ public class SystemAdminService {
     public SiteResource.SiteDto updateSite(UUID siteId, UpdateSite request) {
         if (request == null) throw new ControlPlaneException(400, "INVALID_SITE", "Site changes are required");
         UUID actorId = access.require();
-        Site site = sites.updateForSystemAdmin(siteId, request.name(), request.timezone(), request.defaultLanguage(),
-                request.trackingEnabled(), request.requireConsent(), request.rawRetentionDays(),
-                request.aggregateRetentionDays(), request.fingerprintRiskEnabled(), request.fingerprintRetentionDays());
+        Site site = sites.updateForSystemAdmin(
+                siteId,
+                request.name(),
+                request.timezone(),
+                request.defaultLanguage(),
+                request.trackingEnabled(),
+                request.requireConsent(),
+                request.rawRetentionDays(),
+                request.aggregateRetentionDays(),
+                request.fingerprintRiskEnabled(),
+                request.fingerprintRetentionDays(),
+                request.ipLookupMode(),
+                request.ipLookupHeader());
         audit.record(actorId, null, site.id, "UPDATE_SITE");
         return SiteResource.dto(site);
     }
@@ -152,7 +176,8 @@ public class SystemAdminService {
         UUID actorId = access.require();
         Site site = sites.site(siteId);
         if (trackingIdConfirmation == null || !site.trackingId.equals(trackingIdConfirmation.strip()))
-            throw new ControlPlaneException(409, "SITE_DELETE_CONFIRMATION_REQUIRED", "Enter the site's tracking ID to confirm deletion");
+            throw new ControlPlaneException(
+                    409, "SITE_DELETE_CONFIRMATION_REQUIRED", "Enter the site's tracking ID to confirm deletion");
         audit.record(actorId, null, site.id, "DELETE_SITE");
         sites.deleteForSystemAdmin(siteId);
     }
@@ -160,12 +185,19 @@ public class SystemAdminService {
     public List<WorkspaceDto> workspaces() {
         access.require();
         return Organization.<Organization>list("order by name asc, id asc").stream()
-                .map(org -> new WorkspaceDto(org.id, org.name)).toList();
+                .map(org -> new WorkspaceDto(org.id, org.name))
+                .toList();
     }
 
     private UserDto userDto(AppUser user) {
-        return new UserDto(user.id, user.email, user.displayName, user.status.name().toLowerCase(Locale.ROOT),
-                user.systemAdmin, user.mustChangePassword, user.createdAt,
+        return new UserDto(
+                user.id,
+                user.email,
+                user.displayName,
+                user.status.name().toLowerCase(Locale.ROOT),
+                user.systemAdmin,
+                user.mustChangePassword,
+                user.createdAt,
                 OrganizationMember.count("id.userId", user.id));
     }
 
@@ -182,18 +214,22 @@ public class SystemAdminService {
     }
 
     private void lockAdministration() {
-        entityManager.createNativeQuery("LOCK TABLE app_user IN SHARE ROW EXCLUSIVE MODE").executeUpdate();
+        entityManager
+                .createNativeQuery("LOCK TABLE app_user IN SHARE ROW EXCLUSIVE MODE")
+                .executeUpdate();
     }
 
     private void ensureActiveAdministratorExists() {
         if (AppUser.count("systemAdmin = true and status = ?1", UserStatus.ACTIVE) == 0)
-            throw new ControlPlaneException(409, "LAST_SYSTEM_ADMIN_REQUIRED", "At least one active system administrator must remain");
+            throw new ControlPlaneException(
+                    409, "LAST_SYSTEM_ADMIN_REQUIRED", "At least one active system administrator must remain");
     }
 
     private static String temporaryPassword() {
         SecureRandom random = new SecureRandom();
         StringBuilder value = new StringBuilder(24);
-        for (int i = 0; i < 24; i++) value.append(TEMP_PASSWORD_ALPHABET.charAt(random.nextInt(TEMP_PASSWORD_ALPHABET.length())));
+        for (int i = 0; i < 24; i++)
+            value.append(TEMP_PASSWORD_ALPHABET.charAt(random.nextInt(TEMP_PASSWORD_ALPHABET.length())));
         return value.toString();
     }
 
@@ -201,17 +237,47 @@ public class SystemAdminService {
         return new ControlPlaneException(400, "INVALID_USER", message);
     }
 
-    public record UserDto(UUID id, String email, String displayName, String status, boolean systemAdmin,
-            boolean mustChangePassword, Instant createdAt, long workspaceCount) {}
+    public record UserDto(
+            UUID id,
+            String email,
+            String displayName,
+            String status,
+            boolean systemAdmin,
+            boolean mustChangePassword,
+            Instant createdAt,
+            long workspaceCount) {}
+
     public record UpdateUser(String email, String displayName, String status, Boolean systemAdmin) {}
+
     public record ResetPasswordResult(String temporaryPassword) {}
-    public record CreateSite(@NotNull UUID workspaceId, @NotBlank @Size(max = 120) String name,
-            @NotBlank String timezone, String defaultLanguage,
-            Integer rawRetentionDays, Integer aggregateRetentionDays, Boolean requireConsent,
-            Boolean fingerprintRiskEnabled, Integer fingerprintRetentionDays) {}
-    public record UpdateSite(String name, String timezone, String defaultLanguage, Boolean trackingEnabled,
-            Boolean requireConsent, Integer rawRetentionDays, Integer aggregateRetentionDays,
-            Boolean fingerprintRiskEnabled, Integer fingerprintRetentionDays) {}
+
+    public record CreateSite(
+            @NotNull UUID workspaceId,
+            @NotBlank @Size(max = 120) String name,
+            @NotBlank String timezone,
+            String defaultLanguage,
+            Integer rawRetentionDays,
+            Integer aggregateRetentionDays,
+            Boolean requireConsent,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {}
+
+    public record UpdateSite(
+            String name,
+            String timezone,
+            String defaultLanguage,
+            Boolean trackingEnabled,
+            Boolean requireConsent,
+            Integer rawRetentionDays,
+            Integer aggregateRetentionDays,
+            Boolean fingerprintRiskEnabled,
+            Integer fingerprintRetentionDays,
+            String ipLookupMode,
+            String ipLookupHeader) {}
+
     public record WorkspaceDto(UUID id, String name) {}
+
     public record Page<T>(List<T> items, int page, int size, long total) {}
 }

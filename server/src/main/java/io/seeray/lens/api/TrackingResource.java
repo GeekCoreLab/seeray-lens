@@ -130,7 +130,7 @@ public class TrackingResource {
                     null,
                     clientError || event.visitorId() == null || event.sessionId() == null
                             ? null
-                            : geoLocationResolver.clientIp(httpRequest));
+                            : geoLocationResolver.clientIp(site, httpRequest));
             try {
                 publisher
                         .sendMessage(Message.of(mapper.writeValueAsString(message)))

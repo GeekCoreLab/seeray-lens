@@ -46,6 +46,12 @@ public class Site extends PanacheEntityBase {
     @Column(name = "aggregate_retention_days", nullable = false)
     public int aggregateRetentionDays;
 
+    @Column(name = "ip_lookup_mode", nullable = false)
+    public String ipLookupMode;
+
+    @Column(name = "ip_lookup_header")
+    public String ipLookupHeader;
+
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 

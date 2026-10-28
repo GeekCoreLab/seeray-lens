@@ -1,0 +1,3 @@
+ALTER TABLE site
+  ADD COLUMN ip_lookup_mode VARCHAR(32) NOT NULL DEFAULT 'DEFAULT',
+  ADD COLUMN ip_lookup_header VARCHAR(128);

@@ -20,6 +20,7 @@ export interface CaptureOptions {
   captureSnapshot: boolean;
   captureRecording: boolean;
   recordingId: string;
+  credentials?: RequestCredentials;
 }
 
 const PROTOCOL_VERSION = 1;
@@ -59,6 +60,7 @@ export function startCapture(options: CaptureOptions): () => void {
         headers: { 'Content-Type': 'application/json' },
         body: value,
         keepalive: unload,
+        credentials: options.credentials ?? 'include',
       });
       return response.ok;
     } catch {

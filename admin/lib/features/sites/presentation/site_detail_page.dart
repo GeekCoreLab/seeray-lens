@@ -35,6 +35,17 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
   bool _requireConsent = false;
   bool _fingerprintRiskEnabled = false;
   final _fingerprintRetention = TextEditingController();
+  static const _ipHeaderPresets = [
+    'X-Forwarded-For',
+    'X-Real-IP',
+    'CF-Connecting-IP',
+    'True-Client-IP',
+    'Fastly-Client-IP',
+    'X-Client-IP',
+  ];
+  String _ipLookupMode = 'DEFAULT';
+  String _headerPreset = 'X-Forwarded-For';
+  final _customHeader = TextEditingController();
   String? _loadedId;
   bool _saving = false;
 
@@ -46,6 +57,7 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
     _raw.dispose();
     _aggregate.dispose();
     _fingerprintRetention.dispose();
+    _customHeader.dispose();
     super.dispose();
   }
 
@@ -61,6 +73,20 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
     _requireConsent = site.requireConsent;
     _fingerprintRiskEnabled = site.fingerprintRiskEnabled;
     _fingerprintRetention.text = '${site.fingerprintRetentionDays}';
+    _ipLookupMode = site.ipLookupMode;
+    if (_ipLookupMode == 'HEADER') {
+      final header = site.ipLookupHeader ?? 'X-Forwarded-For';
+      if (_ipHeaderPresets.contains(header)) {
+        _headerPreset = header;
+        _customHeader.text = '';
+      } else {
+        _headerPreset = 'CUSTOM';
+        _customHeader.text = header;
+      }
+    } else {
+      _headerPreset = 'X-Forwarded-For';
+      _customHeader.text = '';
+    }
   }
 
   Future<void> _save() async {
@@ -79,6 +105,12 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
         'fingerprintRetentionDays': int.parse(_fingerprintRetention.text),
         'rawRetentionDays': int.parse(_raw.text),
         'aggregateRetentionDays': int.parse(_aggregate.text),
+        'ipLookupMode': _ipLookupMode,
+        'ipLookupHeader': _ipLookupMode == 'HEADER'
+            ? (_headerPreset == 'CUSTOM'
+                ? _customHeader.text.trim()
+                : _headerPreset)
+            : null,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -336,6 +368,130 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
                       ),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('Client IP acquisition', '访客 IP 获取方式'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.tr(
+                        'Choose how the analytics engine determines visitor IP addresses without relying on fixed environment variables.',
+                        '配置分析服务如何获取访客 IP 地址，不依赖固定的环境变量。',
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _ipLookupMode,
+                      decoration: InputDecoration(
+                        labelText: context.tr(
+                          'IP acquisition method',
+                          'IP 获取方式',
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'DEFAULT',
+                          child: Text(
+                            context.tr(
+                              'System default (environment)',
+                              '系统默认（遵循环境变量可信代理）',
+                            ),
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'NETWORK',
+                          child: Text(
+                            context.tr(
+                              'Network connection (peer IP)',
+                              '网络连接（直接从客户端直连获取）',
+                            ),
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'HEADER',
+                          child: Text(
+                            context.tr(
+                              'HTTP request header',
+                              'HTTP 请求头获取',
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _ipLookupMode = value);
+                        }
+                      },
+                    ),
+                    if (_ipLookupMode == 'HEADER') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _headerPreset,
+                        decoration: InputDecoration(
+                          labelText: context.tr(
+                            'HTTP header preset',
+                            '预设 HTTP 头',
+                          ),
+                        ),
+                        items: [
+                          for (final preset in _ipHeaderPresets)
+                            DropdownMenuItem(
+                              value: preset,
+                              child: Text(preset),
+                            ),
+                          DropdownMenuItem(
+                            value: 'CUSTOM',
+                            child: Text(
+                              context.tr(
+                                'Custom header…',
+                                '自定义请求头…',
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _headerPreset = value);
+                          }
+                        },
+                      ),
+                      if (_headerPreset == 'CUSTOM') ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _customHeader,
+                          decoration: InputDecoration(
+                            labelText: context.tr(
+                              'Custom header name',
+                              '自定义请求头名称',
+                            ),
+                            hintText: 'e.g. X-Custom-Client-IP',
+                          ),
+                          validator: (val) {
+                            if (_ipLookupMode == 'HEADER' &&
+                                _headerPreset == 'CUSTOM') {
+                              final trimmed = val?.trim() ?? '';
+                              if (trimmed.isEmpty) {
+                                return context.tr(
+                                  'Header name is required',
+                                  '请输入请求头名称',
+                                );
+                              }
+                              if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(
+                                trimmed,
+                              )) {
+                                return context.tr(
+                                  'Invalid header name',
+                                  '请求头名称格式无效',
+                                );
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ],
                     const SizedBox(height: 12),
                     Text(context.tr('Tracking ID', '追踪 ID')),
                     SelectableText(site.trackingId),

@@ -1,5 +1,6 @@
 package io.seeray.lens.application;
 
+import io.seeray.lens.domain.site.Site;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -48,7 +49,50 @@ public class GeoLocationResolver {
             candidate = request.getHeader("cf-connecting-ip");
             if (candidate == null || candidate.isBlank()) candidate = request.getHeader("x-real-ip");
         }
-        InetAddress parsed = address(candidate);
+        return normalizeIp(candidate);
+    }
+
+    /**
+     * Resolves the client IP for a specific site based on the site's IP acquisition setting.
+     * Modes:
+     * - "NETWORK": directly from the network connection (remote address), ignoring all headers
+     * - "HEADER": from the specified HTTP header (preset or custom), falling back to remote address if absent/invalid
+     * - "DEFAULT" / other: falls back to system-level trusted proxy configuration
+     */
+    public String clientIp(Site site, HttpServerRequest request) {
+        if (request == null) return null;
+        String mode = site != null && site.ipLookupMode != null
+                ? site.ipLookupMode.trim().toUpperCase(Locale.ROOT)
+                : "DEFAULT";
+        if ("NETWORK".equals(mode)) {
+            if (request.remoteAddress() == null) return null;
+            return normalizeIp(request.remoteAddress().host());
+        }
+        if ("HEADER".equals(mode) && site.ipLookupHeader != null && !site.ipLookupHeader.isBlank()) {
+            String headerVal = request.getHeader(site.ipLookupHeader);
+            if (headerVal != null && !headerVal.isBlank()) {
+                int commaIdx = headerVal.indexOf(',');
+                String candidate = (commaIdx >= 0 ? headerVal.substring(0, commaIdx) : headerVal).trim();
+                String parsed = normalizeIp(candidate);
+                if (parsed != null) return parsed;
+            }
+            if (request.remoteAddress() != null) {
+                return normalizeIp(request.remoteAddress().host());
+            }
+            return null;
+        }
+        return clientIp(request);
+    }
+
+    private static String normalizeIp(String candidate) {
+        if (candidate == null || candidate.isBlank()) return null;
+        String cleaned = candidate.trim();
+        if (cleaned.startsWith("[") && cleaned.contains("]")) {
+            cleaned = cleaned.substring(1, cleaned.indexOf(']'));
+        } else if (cleaned.indexOf(':') > 0 && cleaned.indexOf(':') == cleaned.lastIndexOf(':')) {
+            cleaned = cleaned.substring(0, cleaned.indexOf(':'));
+        }
+        InetAddress parsed = address(cleaned);
         if (parsed == null) return null;
         String normalized = parsed.getHostAddress();
         int scope = normalized.indexOf('%');
