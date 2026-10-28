@@ -2,6 +2,7 @@ package io.seeray.lens.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import io.seeray.lens.domain.common.ControlPlaneException;
 import io.seeray.lens.domain.common.UuidV7;
 import io.seeray.lens.domain.site.Site;
@@ -356,6 +357,7 @@ public class RecordingCaptureService {
 
     public record SnapshotPlan(UUID variantId, boolean captureRequired) {}
 
+    @RegisterForReflection
     public record RecordingUpload(
             int protocolVersion,
             UUID recordingId,
@@ -369,6 +371,7 @@ public class RecordingCaptureService {
     public record DomSnapshot(
             UUID id, UUID variantId, int protocolVersion, int payloadBytes, Instant createdAt, boolean captured) {}
 
+    @RegisterForReflection
     public record RecordingResult(UUID recordingId, int sequence, boolean accepted, boolean truncated) {}
 
     public record RecordingSummary(
