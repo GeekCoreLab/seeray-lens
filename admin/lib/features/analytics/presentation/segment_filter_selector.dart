@@ -46,6 +46,7 @@ class SegmentFilterSelector extends ConsumerWidget {
         final selected = segments
             .where((item) => item.id == selectedId)
             .firstOrNull;
+        final isCompact = MediaQuery.sizeOf(context).width < 640;
         return PopupMenuButton<String>(
           tooltip: context.tr('Filter reports by segment', '按分群筛选报表'),
           onSelected: (value) => ref
@@ -88,7 +89,7 @@ class SegmentFilterSelector extends ConsumerWidget {
               ),
           ],
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 10, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -97,9 +98,9 @@ class SegmentFilterSelector extends ConsumerWidget {
                   size: 18,
                   color: Colors.white,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 180),
+                  constraints: BoxConstraints(maxWidth: isCompact ? 90 : 180),
                   child: Text(
                     selected?.name ?? context.tr('All visitors', '全部访客'),
                     maxLines: 1,

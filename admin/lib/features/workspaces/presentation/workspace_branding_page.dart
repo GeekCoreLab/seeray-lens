@@ -124,7 +124,10 @@ class _WorkspaceBrandingPageState extends ConsumerState<WorkspaceBrandingPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: const AppBackButton(fallback: '/workspaces'),
-      title: Text(context.tr('Workspace branding', '工作区品牌设置')),
+      title: Text(
+        context.tr('Workspace branding', '工作区品牌设置'),
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: [
         const PageHelpButton(
           englishTitle: 'Workspace branding',

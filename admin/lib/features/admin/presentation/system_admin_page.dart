@@ -141,16 +141,20 @@ class _SystemAdminPageState extends ConsumerState<SystemAdminPage> {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(onPressed: () => context.go('/workspaces'), icon: const Icon(Icons.arrow_back)),
-          title: Text(context.tr('System administration', '系统管理')),
+          title: Text(context.tr('System administration', '系统管理'), overflow: TextOverflow.ellipsis),
           actions: [
             IconButton(tooltip: context.tr('Refresh', '刷新'), onPressed: _loadInitial, icon: const Icon(Icons.refresh)),
             const LanguageMenu(),
           ],
-          bottom: TabBar(tabs: [
-            Tab(text: context.tr('Users', '用户')),
-            Tab(text: context.tr('Sites', '站点')),
-            Tab(text: context.tr('Status check', '状态自检')),
-          ]),
+          bottom: TabBar(
+            tabAlignment: TabAlignment.start,
+            isScrollable: true,
+            tabs: [
+              Tab(text: context.tr('Users', '用户')),
+              Tab(text: context.tr('Sites', '站点')),
+              Tab(text: context.tr('Status check', '状态自检')),
+            ],
+          ),
         ),
         body: Column(
           children: [

@@ -45,7 +45,10 @@ class _WorkspaceAuditLogPageState extends ConsumerState<WorkspaceAuditLogPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: const AppBackButton(fallback: '/workspaces'),
-      title: Text(context.tr('Workspace activity', '工作区活动记录')),
+      title: Text(
+        context.tr('Workspace activity', '工作区活动记录'),
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: [
         const PageHelpButton(
           englishTitle: 'Workspace activity',

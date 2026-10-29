@@ -23,7 +23,10 @@ class SitesPage extends ConsumerWidget {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text('${workspace.displayName} ${context.tr('sites', '站点')}'),
+        title: Text(
+          '${workspace.displayName} ${context.tr('sites', '站点')}',
+          overflow: TextOverflow.ellipsis,
+        ),
         leading: IconButton(
           onPressed: () => context.go('/workspaces'),
           icon: const Icon(Icons.business),
@@ -72,16 +75,25 @@ class SitesPage extends ConsumerWidget {
                 ),
               )
             : LayoutBuilder(
-                builder: (context, _) => GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 460,
-                    mainAxisExtent: 132,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 600;
+                  final paddingVal = isCompact ? 12.0 : 16.0;
+                  final availableWidth = constraints.maxWidth - paddingVal * 2;
+                  const maxExtent = 460.0;
+                  const spacing = 12.0;
+                  final columns = (availableWidth / maxExtent).ceil().clamp(1, 10);
+                  final itemWidth = (availableWidth - (columns - 1) * spacing) / columns;
+                  final needsTallCard = isCompact || itemWidth < 380;
+                  return GridView.builder(
+                    padding: EdgeInsets.all(paddingVal),
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: maxExtent,
+                      mainAxisExtent: needsTallCard ? 188 : 136,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: spacing,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
                     final site = items[index];
                     final accent = Theme.of(context).colorScheme.primary;
                     return Card(
@@ -127,7 +139,14 @@ class SitesPage extends ConsumerWidget {
                                 children: [
                                   Chip(
                                     visualDensity: VisualDensity.compact,
-                                    label: Text(site.timezone),
+                                    label: ConstrainedBox(
+                                      constraints: const BoxConstraints(maxWidth: 160),
+                                      child: Text(
+                                        site.timezone,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ),
                                   Chip(
                                     visualDensity: VisualDensity.compact,
@@ -160,8 +179,9 @@ class SitesPage extends ConsumerWidget {
                       ),
                     );
                   },
-                ),
-              ),
+                );
+              },
+            ),
       ),
     );
   }

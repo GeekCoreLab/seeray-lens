@@ -13,16 +13,25 @@ class WorkspacePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(workspaceProvider);
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 640;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(context.tr('Workspaces', '工作区')),
         actions: [
           if (ref.watch(authProvider).isSystemAdmin)
-            TextButton.icon(
-              onPressed: () => context.go('/admin'),
-              icon: const Icon(Icons.admin_panel_settings_outlined),
-              label: Text(context.tr('System admin', '系统管理')),
-            ),
+            isCompact
+                ? IconButton(
+                    tooltip: context.tr('System admin', '系统管理'),
+                    onPressed: () => context.go('/admin'),
+                    icon: const Icon(Icons.admin_panel_settings_outlined),
+                  )
+                : TextButton.icon(
+                    onPressed: () => context.go('/admin'),
+                    icon: const Icon(Icons.admin_panel_settings_outlined),
+                    label: Text(context.tr('System admin', '系统管理')),
+                  ),
           const PageHelpButton(
             englishTitle: 'About workspaces',
             chineseTitle: '工作区是什么？',
@@ -32,13 +41,22 @@ class WorkspacePage extends ConsumerWidget {
                 '工作区是一个团队或项目的隔离边界，包含其站点、成员和 API 令牌。当数据或访问权限需要隔离时，请创建新的工作区。',
           ),
           const LanguageMenu(),
-          TextButton(
-            onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) context.go('/');
-            },
-            child: Text(context.tr('Log out', '退出登录')),
-          ),
+          isCompact
+              ? IconButton(
+                  tooltip: context.tr('Log out', '退出登录'),
+                  onPressed: () async {
+                    await ref.read(authProvider.notifier).logout();
+                    if (context.mounted) context.go('/');
+                  },
+                  icon: const Icon(Icons.logout),
+                )
+              : TextButton(
+                  onPressed: () async {
+                    await ref.read(authProvider.notifier).logout();
+                    if (context.mounted) context.go('/');
+                  },
+                  child: Text(context.tr('Log out', '退出登录')),
+                ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -54,87 +72,145 @@ class WorkspacePage extends ConsumerWidget {
             child: Text(context.tr('Retry loading workspaces', '重新加载工作区')),
           ),
         ),
-        data: (items) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(context.tr('Choose a workspace', '选择工作区')),
-            const SizedBox(height: 8),
-            ...items.map(
-              (workspace) => Card(
-                child: ListTile(
-                  leading: _workspaceAvatar(workspace),
-                  title: Text(workspace.name),
-                  subtitle: Text(_workspaceRole(context, workspace.role)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (workspace.role == 'owner')
-                        IconButton(
-                          tooltip: context.tr('Branding', '品牌设置'),
-                          onPressed: () => context.go(
-                            '/workspaces/${workspace.id}/branding',
+        data: (items) => LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 640;
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(context.tr('Choose a workspace', '选择工作区')),
+                const SizedBox(height: 8),
+                ...items.map(
+                  (workspace) => Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: isNarrow
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ListTile(
+                                leading: _workspaceAvatar(workspace),
+                                title: Text(workspace.name),
+                                subtitle: Text(
+                                  _workspaceRole(context, workspace.role),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  ref
+                                      .read(workspaceProvider.notifier)
+                                      .select(workspace);
+                                  context.go('/sites');
+                                },
+                              ),
+                              if (_hasWorkspaceActions(workspace)) ...[
+                                const Divider(height: 1, indent: 16, endIndent: 16),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  child: Wrap(
+                                    spacing: 4,
+                                    children: _workspaceActionButtons(
+                                      context,
+                                      ref,
+                                      workspace,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )
+                        : ListTile(
+                            leading: _workspaceAvatar(workspace),
+                            title: Text(workspace.name),
+                            subtitle: Text(
+                              _workspaceRole(context, workspace.role),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ..._workspaceActionButtons(
+                                  context,
+                                  ref,
+                                  workspace,
+                                ),
+                                const Icon(Icons.chevron_right),
+                              ],
+                            ),
+                            onTap: () {
+                              ref
+                                  .read(workspaceProvider.notifier)
+                                  .select(workspace);
+                              context.go('/sites');
+                            },
                           ),
-                          icon: const Icon(Icons.palette_outlined),
-                        ),
-                      if (workspace.role == 'owner' ||
-                          workspace.role == 'admin')
-                        IconButton(
-                          tooltip: context.tr('Workspace extensions', '工作区扩展'),
-                          onPressed: () => context.go(
-                            '/workspaces/${workspace.id}/extensions',
-                          ),
-                          icon: const Icon(Icons.extension_outlined),
-                        ),
-                      if (workspace.role == 'owner' ||
-                          workspace.role == 'admin')
-                        IconButton(
-                          tooltip: context.tr('System diagnostics', '系统诊断'),
-                          onPressed: () => context.go(
-                            '/workspaces/${workspace.id}/diagnostics',
-                          ),
-                          icon: const Icon(Icons.health_and_safety_outlined),
-                        ),
-                      if (workspace.role == 'owner' ||
-                          workspace.role == 'admin')
-                        IconButton(
-                          tooltip: context.tr('Workspace activity', '工作区活动记录'),
-                          onPressed: () => context.go(
-                            '/workspaces/${workspace.id}/activity',
-                          ),
-                          icon: const Icon(Icons.history),
-                        ),
-                      if (workspace.role == 'owner' ||
-                          workspace.role == 'admin')
-                        IconButton(
-                          tooltip: context.tr(
-                            workspace.role == 'owner'
-                                ? 'Manage members'
-                                : 'View members',
-                            workspace.role == 'owner' ? '管理成员' : '查看成员',
-                          ),
-                          onPressed: () {
-                            ref
-                                .read(workspaceProvider.notifier)
-                                .select(workspace);
-                            context.go('/workspaces/${workspace.id}/members');
-                          },
-                          icon: const Icon(Icons.group_outlined),
-                        ),
-                      const Icon(Icons.chevron_right),
-                    ],
                   ),
-                  onTap: () {
-                    ref.read(workspaceProvider.notifier).select(workspace);
-                    context.go('/sites');
-                  },
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
   }
+
+  bool _hasWorkspaceActions(Workspace workspace) =>
+      workspace.role == 'owner' || workspace.role == 'admin';
+
+  List<Widget> _workspaceActionButtons(
+    BuildContext context,
+    WidgetRef ref,
+    Workspace workspace,
+  ) => [
+    if (workspace.role == 'owner')
+      IconButton(
+        tooltip: context.tr('Branding', '品牌设置'),
+        onPressed: () {
+          ref.read(workspaceProvider.notifier).select(workspace);
+          context.go('/workspaces/${workspace.id}/branding');
+        },
+        icon: const Icon(Icons.palette_outlined),
+      ),
+    if (workspace.role == 'owner' || workspace.role == 'admin')
+      IconButton(
+        tooltip: context.tr('Workspace extensions', '工作区扩展'),
+        onPressed: () {
+          ref.read(workspaceProvider.notifier).select(workspace);
+          context.go('/workspaces/${workspace.id}/extensions');
+        },
+        icon: const Icon(Icons.extension_outlined),
+      ),
+    if (workspace.role == 'owner' || workspace.role == 'admin')
+      IconButton(
+        tooltip: context.tr('System diagnostics', '系统诊断'),
+        onPressed: () {
+          ref.read(workspaceProvider.notifier).select(workspace);
+          context.go('/workspaces/${workspace.id}/diagnostics');
+        },
+        icon: const Icon(Icons.health_and_safety_outlined),
+      ),
+    if (workspace.role == 'owner' || workspace.role == 'admin')
+      IconButton(
+        tooltip: context.tr('Workspace activity', '工作区活动记录'),
+        onPressed: () {
+          ref.read(workspaceProvider.notifier).select(workspace);
+          context.go('/workspaces/${workspace.id}/activity');
+        },
+        icon: const Icon(Icons.history),
+      ),
+    if (workspace.role == 'owner' || workspace.role == 'admin')
+      IconButton(
+        tooltip: context.tr(
+          workspace.role == 'owner' ? 'Manage members' : 'View members',
+          workspace.role == 'owner' ? '管理成员' : '查看成员',
+        ),
+        onPressed: () {
+          ref.read(workspaceProvider.notifier).select(workspace);
+          context.go('/workspaces/${workspace.id}/members');
+        },
+        icon: const Icon(Icons.group_outlined),
+      ),
+  ];
 
   Future<void> _createWorkspace(BuildContext context, WidgetRef ref) async {
     final name = await showDialog<String>(

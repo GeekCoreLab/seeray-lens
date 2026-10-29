@@ -112,45 +112,50 @@ class _WorkspaceInvitationPageState
         title: Text(context.tr('Workspace invitation', '工作区邀请')),
         actions: const [LanguageMenu()],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: invitation == null
-                ? _InvitationError(
-                    message: context.tr(
-                      'This invitation link is incomplete.',
-                      '邀请链接不完整。',
-                    ),
-                  )
-                : invitation.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (error, stackTrace) =>
-                        _InvitationError(message: error.toString()),
-                    data: (preview) => _InvitationCard(
-                      preview: preview,
-                      authenticated: auth.isAuthenticated,
-                      restoring:
-                          auth.phase == AuthPhase.restoring ||
-                          auth.phase == AuthPhase.refreshing,
-                      accepted: _accepted,
-                      createAccount:
-                          _createAccount && preview['accountExists'] != true,
-                      submitting: _submitting,
-                      error: _error,
-                      form: _form,
-                      password: _password,
-                      displayName: _displayName,
-                      onModeChanged: (value) =>
-                          setState(() => _createAccount = value),
-                      onSignOut: () async {
-                        await ref.read(authProvider.notifier).logout();
-                      },
-                      onSubmit: () => _submit(preview, auth.isAuthenticated),
-                    ),
-                  ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: invitation == null
+                    ? _InvitationError(
+                        message: context.tr(
+                          'This invitation link is incomplete.',
+                          '邀请链接不完整。',
+                        ),
+                      )
+                    : invitation.when(
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (error, stackTrace) =>
+                            _InvitationError(message: error.toString()),
+                        data: (preview) => _InvitationCard(
+                          preview: preview,
+                          authenticated: auth.isAuthenticated,
+                          restoring:
+                              auth.phase == AuthPhase.restoring ||
+                              auth.phase == AuthPhase.refreshing,
+                          accepted: _accepted,
+                          createAccount:
+                              _createAccount && preview['accountExists'] != true,
+                          submitting: _submitting,
+                          error: _error,
+                          form: _form,
+                          password: _password,
+                          displayName: _displayName,
+                          onModeChanged: (value) =>
+                              setState(() => _createAccount = value),
+                          onSignOut: () async {
+                            await ref.read(authProvider.notifier).logout();
+                          },
+                          onSubmit: () => _submit(preview, auth.isAuthenticated),
+                        ),
+                      ),
+              ),
+            ),
           ),
         ),
       ),

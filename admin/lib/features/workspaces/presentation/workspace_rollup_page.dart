@@ -49,7 +49,10 @@ class _WorkspaceRollupPageState extends ConsumerState<WorkspaceRollupPage> {
     return Scaffold(
       backgroundColor: const Color(0xfff3f5f8),
       appBar: AppBar(
-        title: Text(context.tr('Workspace roll-up', '工作区汇总')),
+        title: Text(
+          context.tr('Workspace roll-up', '工作区汇总'),
+          overflow: TextOverflow.ellipsis,
+        ),
         leading: AppBackButton(fallback: '/sites'),
         actions: [
           const PageHelpButton(
@@ -129,11 +132,17 @@ class _WorkspaceRollupPageState extends ConsumerState<WorkspaceRollupPage> {
                 leading: const Icon(Icons.date_range),
                 title: Text(context.tr('Reporting period', '统计周期')),
                 subtitle: Text('${_dateQuery(_from)} – ${_dateQuery(_to)}'),
-                trailing: OutlinedButton.icon(
-                  onPressed: () => _chooseRange(),
-                  icon: const Icon(Icons.edit_calendar_outlined),
-                  label: Text(context.tr('Change dates', '调整日期')),
-                ),
+                trailing: MediaQuery.sizeOf(context).width < 500
+                    ? IconButton(
+                        tooltip: context.tr('Change dates', '调整日期'),
+                        onPressed: _chooseRange,
+                        icon: const Icon(Icons.edit_calendar_outlined),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: _chooseRange,
+                        icon: const Icon(Icons.edit_calendar_outlined),
+                        label: Text(context.tr('Change dates', '调整日期')),
+                      ),
               ),
               const Divider(height: 1),
               ExpansionTile(

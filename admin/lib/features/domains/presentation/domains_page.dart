@@ -17,7 +17,10 @@ class DomainsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: AppBackButton(fallback: '/sites/$siteId'),
-        title: Text(context.tr('Allowed domains', '允许的域名')),
+        title: Text(
+          context.tr('Allowed domains', '允许的域名'),
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: const [
           PageHelpButton(
             englishTitle: 'Allowed domains',

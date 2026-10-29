@@ -18,7 +18,10 @@ class WorkspaceMembersPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: const AppBackButton(fallback: '/workspaces'),
-        title: Text(context.tr('Workspace members', '工作区成员')),
+        title: Text(
+          context.tr('Workspace members', '工作区成员'),
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           const PageHelpButton(
             englishTitle: 'Workspace membership',

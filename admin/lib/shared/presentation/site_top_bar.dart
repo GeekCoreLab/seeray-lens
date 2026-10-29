@@ -63,51 +63,64 @@ class SiteTopBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(104);
 
   @override
-  Widget build(BuildContext context) => AppBar(
-    backgroundColor: const Color(0xff202b3b),
-    foregroundColor: Colors.white,
-    leading: const AppBackButton(fallback: '/sites'),
-    titleSpacing: 0,
-    title: Container(
-      width: 132,
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      color: Colors.white,
-      child: Image.asset('assets/seeray-lens-logo.png', fit: BoxFit.contain),
-    ),
-    actions: [
-      if (rangeState != null && onSelectRange != null)
-        TextButton.icon(
-          onPressed: onSelectRange,
-          icon: const Icon(Icons.date_range_outlined, size: 18),
-          label: Text(analyticsRangeLabel(context, rangeState!)),
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
-        ),
-      ?segmentFilter,
-      if (onRefresh != null)
-        IconButton(
-          tooltip: context.tr('Refresh', '刷新'),
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh),
-        ),
-      help,
-      const LanguageMenu(),
-    ],
-    bottom: PreferredSize(
-      preferredSize: const Size.fromHeight(48),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(left: 12, bottom: 8),
-        child: Row(
-          children: _siteNavGroups
-              .map((group) => _groupMenu(context, group))
-              .toList(),
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 640;
+    final isVeryCompact = width < 480;
+
+    return AppBar(
+      backgroundColor: const Color(0xff202b3b),
+      foregroundColor: Colors.white,
+      leading: const AppBackButton(fallback: '/sites'),
+      titleSpacing: 0,
+      title: Container(
+        width: isVeryCompact ? 104 : 132,
+        height: isVeryCompact ? 34 : 40,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        color: Colors.white,
+        child: Image.asset('assets/seeray-lens-logo.png', fit: BoxFit.contain),
+      ),
+      actions: [
+        if (rangeState != null && onSelectRange != null)
+          isCompact
+              ? IconButton(
+                  tooltip: analyticsRangeLabel(context, rangeState!),
+                  onPressed: onSelectRange,
+                  icon: const Icon(Icons.date_range_outlined, size: 20),
+                )
+              : TextButton.icon(
+                  onPressed: onSelectRange,
+                  icon: const Icon(Icons.date_range_outlined, size: 18),
+                  label: Text(analyticsRangeLabel(context, rangeState!)),
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                ),
+        ?segmentFilter,
+        if (onRefresh != null)
+          IconButton(
+            tooltip: context.tr('Refresh', '刷新'),
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        help,
+        const LanguageMenu(),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.only(left: 12, bottom: 8),
+          child: Row(
+            children: _siteNavGroups
+                .map((group) => _groupMenu(context, group, isCompact: isCompact))
+                .toList(),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _groupMenu(BuildContext context, _SiteNavGroup group) {
+  Widget _groupMenu(BuildContext context, _SiteNavGroup group, {bool isCompact = false}) {
     final active = group.items.any((item) => item.tab == selected);
     final current = group.items
         .where((item) => item.tab == selected)
@@ -144,7 +157,10 @@ class SiteTopBar extends StatelessWidget implements PreferredSizeWidget {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 8 : 11,
+              vertical: 8,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -18,7 +18,10 @@ class TokenSettingsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: const AppBackButton(fallback: '/sites'),
-        title: Text(context.tr('Workspace API tokens', '工作区 API 令牌')),
+        title: Text(
+          context.tr('Workspace API tokens', '工作区 API 令牌'),
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: const [
           PageHelpButton(
             englishTitle: 'API tokens',

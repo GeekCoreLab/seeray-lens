@@ -737,7 +737,13 @@ class _MergedActionTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: Text(_time(action.at)),
+      trailing: Text(
+        merged.count > 1 &&
+                (merged.firstAt.minute != merged.lastAt.minute ||
+                    merged.firstAt.hour != merged.lastAt.hour)
+            ? '${_time(merged.firstAt)}–${_time(merged.lastAt)}'
+            : _time(action.at),
+      ),
     );
   }
 }
@@ -816,7 +822,10 @@ class _HistoryPageButton extends StatelessWidget {
 
 String _page(String? value) => value?.isNotEmpty == true ? value! : '—';
 
-String _time(DateTime value) => value.toString().substring(11, 16);
+String _time(DateTime value) {
+  final local = value.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
 
 String _duration(int milliseconds) {
   final seconds = milliseconds ~/ 1000;

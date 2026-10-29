@@ -62,7 +62,10 @@ class _WorkspaceDiagnosticsPageState
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: const AppBackButton(fallback: '/workspaces'),
-      title: Text(context.tr('System diagnostics', '系统诊断')),
+      title: Text(
+        context.tr('System diagnostics', '系统诊断'),
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: [
         const PageHelpButton(
           englishTitle: 'System diagnostics',

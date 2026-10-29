@@ -219,7 +219,7 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
               backgroundColor: const Color(0xff202b3b),
               foregroundColor: Colors.white,
               leading: AppBackButton(fallback: '/sites/${site.id}/dashboard'),
-              title: Text(site.name),
+              title: Text(site.name, overflow: TextOverflow.ellipsis),
               actions: const [
                 PageHelpButton(
                   englishTitle: 'Site settings',
@@ -234,6 +234,7 @@ class _SiteDetailPageState extends ConsumerState<SiteDetailPage> {
                 preferredSize: const Size.fromHeight(48),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.only(left: 12, bottom: 8),
                   child: Row(
                     children: [

@@ -7,37 +7,44 @@ class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      titleSpacing: 0,
-      title: Container(
-        width: 156,
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        color: Colors.white,
-        child: Image.asset(
-          'assets/seeray-lens-logo.png',
-          fit: BoxFit.contain,
-        ),
-      ),
-      actions: [
-        const LanguageMenu(),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: FilledButton.tonal(
-            onPressed: () => context.go('/login'),
-            child: Text(context.tr('Sign in', '登录管理台')),
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 600;
+
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: Container(
+          width: isCompact ? 120 : 156,
+          height: isCompact ? 38 : 44,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          color: Colors.white,
+          child: Image.asset(
+            'assets/seeray-lens-logo.png',
+            fit: BoxFit.contain,
           ),
         ),
-      ],
-    ),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000),
-        child: ListView(
-          padding: const EdgeInsets.all(28),
-          children: [
-            const SizedBox(height: 36),
+        actions: [
+          const LanguageMenu(),
+          Padding(
+            padding: EdgeInsets.only(right: isCompact ? 12 : 16),
+            child: FilledButton.tonal(
+              onPressed: () => context.go('/login'),
+              child: Text(context.tr('Sign in', '登录管理台')),
+            ),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: ListView(
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 16 : 28,
+              vertical: isCompact ? 18 : 28,
+            ),
+            children: [
+              SizedBox(height: isCompact ? 16 : 36),
             Text(
               context.tr(
                 'Privacy-first analytics you can understand.',
@@ -111,6 +118,7 @@ class LandingPage extends StatelessWidget {
     ),
   );
 }
+}
 
 class _Feature extends StatelessWidget {
   const _Feature({required this.icon, required this.title, required this.body});
@@ -119,8 +127,8 @@ class _Feature extends StatelessWidget {
   final String body;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 300,
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 300),
     child: Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
