@@ -7,7 +7,10 @@ import '../../../core/i18n/app_i18n.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/realtime_controller.dart';
+import 'merged_timeline_action.dart';
+import 'timeline_date_formatter.dart';
 import 'visitor_association_controls.dart';
+import 'visitor_timezone_utils.dart';
 
 class RealtimePage extends ConsumerStatefulWidget {
   const RealtimePage({required this.siteId, this.embedded = false, super.key});
@@ -342,6 +345,10 @@ class _LiveVisitCard extends StatelessWidget {
                   icon: Icons.translate_outlined,
                   text: visitor.language!,
                 ),
+              VisitorTimezoneBadge(
+                time: visitor.lastActivityAt,
+                countryCode: visitor.countryCode,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -365,26 +372,28 @@ class _LiveVisitCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          for (final action in visitor.actions)
+          for (final merged in mergeConsecutiveActions<AnalyticsLiveAction>(
+            items: visitor.actions,
+            keyOf: (action) => '${action.eventType}|${action.path ?? ''}|${action.title ?? ''}',
+            timeOf: (action) => action.at,
+          ))
             ListTile(
               dense: true,
               visualDensity: VisualDensity.compact,
               contentPadding: EdgeInsets.zero,
               leading: Icon(
-                action.eventType == 'page_view'
+                merged.sample.eventType == 'page_view'
                     ? Icons.web_outlined
                     : Icons.bolt_outlined,
                 size: 18,
               ),
               title: Text(
-                action.title?.isNotEmpty == true
-                    ? action.title!
-                    : action.path ?? action.eventType,
+                '${merged.sample.title?.isNotEmpty == true ? merged.sample.title! : merged.sample.path ?? merged.sample.eventType}${merged.count > 1 ? ' * ${merged.count}' : ''}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                '${action.eventType} · ${action.at.toString().substring(0, 16)}',
+                '${merged.sample.eventType} · ${formatTimelineTime(context, merged.sample.at)}',
                 maxLines: 1,
               ),
             ),

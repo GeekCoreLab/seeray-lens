@@ -9,6 +9,9 @@ import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
 import '../application/visitor_profile_controller.dart';
+import 'merged_timeline_action.dart';
+import 'timeline_date_formatter.dart';
+import 'visitor_timezone_utils.dart';
 import 'visitor_visuals.dart';
 
 class VisitorProfilePage extends ConsumerWidget {
@@ -354,8 +357,8 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
               label: context.tr('Lifetime visits', '累计访问'),
               value: '${profile.lifetimeSessions}',
               detail: context.tr(
-                'First seen ${_date(profile.firstSeenAt)} · last seen ${_date(profile.lastSeenAt)}',
-                '首次 ${_date(profile.firstSeenAt)} · 最近 ${_date(profile.lastSeenAt)}',
+                'First seen ${formatTimelineTime(context, profile.firstSeenAt)} · last seen ${formatTimelineTime(context, profile.lastSeenAt)}',
+                '首次 ${formatTimelineTime(context, profile.firstSeenAt)} · 最近 ${formatTimelineTime(context, profile.lastSeenAt)}',
               ),
             ),
             if (profile.identityLinkStatus == 'linked')
@@ -457,7 +460,14 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
             elevation: 0,
             child: Column(
               children: [
-                for (final action in _actions) _ActionTile(action: action),
+                for (final merged
+                    in mergeConsecutiveActions<AnalyticsVisitorProfileAction>(
+                      items: _actions,
+                      keyOf: (action) =>
+                          '${action.eventType}|${action.path ?? ''}|${action.title ?? ''}|${action.sessionId}',
+                      timeOf: (action) => action.at,
+                    ))
+                  _MergedActionTile(merged: merged),
               ],
             ),
           ),
@@ -604,7 +614,7 @@ class _VisitCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  _date(visit.startedAt),
+                  formatTimelineTime(context, visit.startedAt),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -680,6 +690,10 @@ class _VisitCard extends StatelessWidget {
                   ),
                 if (campaign.isNotEmpty)
                   _InfoChip(text: '${context.tr('Campaign', '活动')}: $campaign'),
+                VisitorTimezoneBadge(
+                  time: visit.startedAt,
+                  countryCode: visit.countryCode,
+                ),
               ],
             ),
           ],
@@ -689,37 +703,43 @@ class _VisitCard extends StatelessWidget {
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.action});
+class _MergedActionTile extends StatelessWidget {
+  const _MergedActionTile({required this.merged});
 
-  final AnalyticsVisitorProfileAction action;
+  final MergedTimelineAction<AnalyticsVisitorProfileAction> merged;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    dense: true,
-    leading: CircleAvatar(
-      radius: 17,
-      child: Icon(
-        action.eventType == 'page_view'
-            ? Icons.web_outlined
-            : Icons.bolt_outlined,
-        size: 18,
+  Widget build(BuildContext context) {
+    final action = merged.sample;
+    final baseTitle = action.title?.isNotEmpty == true
+        ? action.title!
+        : action.path ?? action.eventType;
+    final title = merged.count > 1 ? '$baseTitle * ${merged.count}' : baseTitle;
+
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        radius: 17,
+        child: Icon(
+          action.eventType == 'page_view'
+              ? Icons.web_outlined
+              : Icons.bolt_outlined,
+          size: 18,
+        ),
       ),
-    ),
-    title: Text(
-      action.title?.isNotEmpty == true
-          ? action.title!
-          : action.path ?? action.eventType,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    subtitle: Text(
-      '${action.eventType} · ${_date(action.at)} · ${context.tr('Visit', '访问')} ${_shortSessionId(action.sessionId)}',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    trailing: Text(_time(action.at)),
-  );
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${action.eventType} · ${formatTimelineTime(context, action.at)} · ${context.tr('Visit', '访问')} ${_shortSessionId(action.sessionId)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Text(_time(action.at)),
+    );
+  }
 }
 
 class _InfoChip extends StatelessWidget {
@@ -795,8 +815,6 @@ class _HistoryPageButton extends StatelessWidget {
 }
 
 String _page(String? value) => value?.isNotEmpty == true ? value! : '—';
-
-String _date(DateTime value) => value.toString().substring(0, 16);
 
 String _time(DateTime value) => value.toString().substring(11, 16);
 

@@ -7,6 +7,7 @@ import '../application/analytics_controller.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
 import '../application/visitor_profile_controller.dart';
+import 'timeline_date_formatter.dart';
 import 'visitor_association_controls.dart';
 
 class VisitorLogPanel extends ConsumerStatefulWidget {
@@ -256,7 +257,7 @@ class _VisitorVisitTile extends StatelessWidget {
         subtitle: Text(
           [
             if (path.isNotEmpty) path.join('  →  '),
-            '${_date(entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
+            '${formatTimelineTime(context, entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
             if (entry.fingerprintRiskLevel != 'none')
               !entry.fingerprintEvidenceTypes.contains('browser') &&
                       entry.fingerprintConfidence == 'low'
@@ -300,7 +301,7 @@ class _VisitorVisitTile extends StatelessWidget {
     );
   }
 
-  String _date(DateTime value) => value.toString().substring(0, 16);
+  // Keep fallback or helper if needed
 }
 
 class _VisitorVisitGroup extends StatelessWidget {
