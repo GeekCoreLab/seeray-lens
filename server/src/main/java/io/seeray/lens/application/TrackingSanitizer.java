@@ -27,6 +27,16 @@ public final class TrackingSanitizer {
 
     private TrackingSanitizer() {}
 
+    public static CleanUrl referrer(String value, ObjectMapper mapper) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            CleanUrl clean = url(value, mapper);
+            return clean.host() == null ? null : clean;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static CleanUrl url(String value, ObjectMapper mapper) {
         return url(value, mapper, null);
     }
@@ -40,7 +50,18 @@ public final class TrackingSanitizer {
         if (value == null || value.isBlank())
             return new CleanUrl(null, null, null, null, null, null, null, null, cleanTitle, null, null, null, null);
         try {
-            URI uri = URI.create(value.trim());
+            URI uri;
+            try {
+                uri = URI.create(value.trim());
+            } catch (IllegalArgumentException e) {
+                String sanitized = value.trim()
+                        .replace(" ", "%20")
+                        .replace("|", "%7C")
+                        .replace("{", "%7B")
+                        .replace("}", "%7D")
+                        .replace("\\", "%5C");
+                uri = URI.create(sanitized);
+            }
             if (uri.getScheme() == null || uri.getHost() == null || uri.getUserInfo() != null)
                 throw new IllegalArgumentException();
             String host = IDN.toASCII(uri.getHost(), IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT);

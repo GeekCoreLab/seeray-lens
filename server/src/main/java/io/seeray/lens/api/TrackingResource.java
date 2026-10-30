@@ -78,7 +78,7 @@ public class TrackingResource {
             TrackingSanitizer.CleanUrl page = clientError
                     ? TrackingSanitizer.crashUrl(event.url(), mapper)
                     : TrackingSanitizer.url(event.url(), mapper, event.title(), site.id);
-            TrackingSanitizer.CleanUrl ref = clientError ? null : TrackingSanitizer.url(event.referrer(), mapper);
+            TrackingSanitizer.CleanUrl ref = clientError ? null : TrackingSanitizer.referrer(event.referrer(), mapper);
             String requestOrigin = origin != null && !origin.isBlank() ? origin : referer;
             if (!matchesAllowed(page == null ? null : page.host(), allowed)
                     || requestOrigin != null
@@ -182,7 +182,7 @@ public class TrackingResource {
                 event.occurredAt() == null ? Instant.now() : event.occurredAt(),
                 "page_view",
                 page,
-                TrackingSanitizer.url(event.referrer(), mapper),
+                TrackingSanitizer.referrer(event.referrer(), mapper),
                 TrackingSanitizer.json(eventData(event, null, mapper), mapper),
                 event.durationMs(),
                 null,

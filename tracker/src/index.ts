@@ -743,9 +743,20 @@ export class Tracker {
       eventId,
       type,
       occurredAt,
-      url: options.url ?? globalThis.location?.href,
+      url: options.url
+        ? (options.url.startsWith('http://') || options.url.startsWith('https://')
+            ? options.url
+            : absoluteApiUrl(options.url, globalThis.location?.href))
+        : globalThis.location?.href,
       title: options.title === null ? undefined : options.title ?? globalThis.document?.title,
-      referrer: options.referrer === null ? undefined : options.referrer ?? globalThis.document?.referrer,
+      referrer: (() => {
+        const raw = options.referrer === null ? undefined : options.referrer ?? globalThis.document?.referrer;
+        if (typeof raw === 'string') {
+          const trimmed = raw.trim();
+          if (trimmed === 'about:blank' || trimmed.startsWith('about:')) return '';
+        }
+        return raw;
+      })(),
       durationMs: options.durationMs,
       properties: options.properties,
       category: options.category,

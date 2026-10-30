@@ -68,4 +68,44 @@ class TrackingSanitizerTest {
         Map<String, Object> value = Map.of("a", Map.of("b", Map.of("c", Map.of("d", Map.of("e", Map.of("f", 1))))));
         assertThrows(ControlPlaneException.class, () -> TrackingSanitizer.json(value, mapper));
     }
+
+    @Test
+    void testGeekcorelabValid() {
+        assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn/", mapper));
+        assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn", mapper));
+        assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn/#/", mapper));
+        assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn/path?foo=bar", mapper));
+    }
+
+    @Test
+    void testAboutBlankReferrer() {
+        assertNull(TrackingSanitizer.referrer("about:blank", mapper));
+    }
+
+    @Test
+    void testRelativeReferrer() {
+        assertNull(TrackingSanitizer.referrer("/", mapper));
+    }
+
+    @Test
+    void testAndroidAppReferrer() {
+        assertDoesNotThrow(() -> TrackingSanitizer.referrer("android-app://com.google.android.googlequicksearchbox", mapper));
+    }
+
+    @Test
+    void testUnencodedSpaces() {
+        var clean = TrackingSanitizer.url("https://www.geekcorelab.cn/?q=hello world", mapper);
+        assertNotNull(clean);
+        assertEquals("www.geekcorelab.cn", clean.host());
+    }
+
+    @Test
+    void testChinesePath() {
+        assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn/文章/1", mapper));
+    }
+
+    @Test
+    void testChineseQuery() {
+        assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn/?q=测试", mapper));
+    }
 }
