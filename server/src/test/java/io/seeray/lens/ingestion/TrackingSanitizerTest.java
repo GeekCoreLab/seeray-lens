@@ -89,7 +89,8 @@ class TrackingSanitizerTest {
 
     @Test
     void testAndroidAppReferrer() {
-        assertDoesNotThrow(() -> TrackingSanitizer.referrer("android-app://com.google.android.googlequicksearchbox", mapper));
+        assertDoesNotThrow(
+                () -> TrackingSanitizer.referrer("android-app://com.google.android.googlequicksearchbox", mapper));
     }
 
     @Test
@@ -116,7 +117,8 @@ class TrackingSanitizerTest {
         assertEquals("www.geekcorelab.cn", cleanQuote.host());
         assertEquals("/search", cleanQuote.path());
 
-        var cleanSpecial = TrackingSanitizer.url("https://www.geekcorelab.cn/?expr=1<2&foo=bar^baz&code=`echo`", mapper);
+        var cleanSpecial =
+                TrackingSanitizer.url("https://www.geekcorelab.cn/?expr=1<2&foo=bar^baz&code=`echo`", mapper);
         assertNotNull(cleanSpecial);
         assertEquals("www.geekcorelab.cn", cleanSpecial.host());
 
@@ -127,7 +129,8 @@ class TrackingSanitizerTest {
 
     @Test
     void testRelativeUrlWithBaseOrigin() {
-        var clean = TrackingSanitizer.url("/posts/hello?q=\"world\"", mapper, "Title", null, "https://www.geekcorelab.cn");
+        var clean =
+                TrackingSanitizer.url("/posts/hello?q=\"world\"", mapper, "Title", null, "https://www.geekcorelab.cn");
         assertNotNull(clean);
         assertEquals("www.geekcorelab.cn", clean.host());
         assertEquals("/posts/hello", clean.path());
