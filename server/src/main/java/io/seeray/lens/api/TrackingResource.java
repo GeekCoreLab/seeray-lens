@@ -73,13 +73,13 @@ public class TrackingResource {
             throw new ControlPlaneException(404, "TRACKING_UNAVAILABLE", "Tracking endpoint unavailable");
         List<SiteAllowedDomain> allowed = sites.trackingDomains(site.id);
         GeoLocationResolver.Location location = geoLocationResolver.resolve(httpRequest);
+        String requestOrigin = origin != null && !origin.isBlank() ? origin : referer;
         for (TrackingPayload.TrackingEvent event : request.events()) {
             boolean clientError = "client_error".equals(event.type());
             TrackingSanitizer.CleanUrl page = clientError
-                    ? TrackingSanitizer.crashUrl(event.url(), mapper)
-                    : TrackingSanitizer.url(event.url(), mapper, event.title(), site.id);
+                    ? TrackingSanitizer.crashUrl(event.url(), mapper, requestOrigin)
+                    : TrackingSanitizer.url(event.url(), mapper, event.title(), site.id, requestOrigin);
             TrackingSanitizer.CleanUrl ref = clientError ? null : TrackingSanitizer.referrer(event.referrer(), mapper);
-            String requestOrigin = origin != null && !origin.isBlank() ? origin : referer;
             if (!matchesAllowed(page == null ? null : page.host(), allowed)
                     || requestOrigin != null
                             && !requestOrigin.isBlank()

@@ -74,9 +74,10 @@ public class HeatmapTrackingResource {
         if (site == null || !site.trackingEnabled || !config.enabled())
             throw new ControlPlaneException(404, "HEATMAP_UNAVAILABLE", "Heatmap endpoint unavailable");
         List<SiteAllowedDomain> domains = sites.trackingDomains(site.id);
-        String requestHost = host(origin == null || origin.isBlank() ? referer : origin);
+        String requestOrigin = origin != null && !origin.isBlank() ? origin : referer;
+        String requestHost = host(requestOrigin);
         for (HeatmapPayload.Event event : payload.events()) {
-            TrackingSanitizer.CleanUrl clean = TrackingSanitizer.url(event.url(), null);
+            TrackingSanitizer.CleanUrl clean = TrackingSanitizer.url(event.url(), null, null, site.id, requestOrigin);
             if (clean == null
                     || !allowed(clean.host(), domains)
                     || (requestHost != null && !allowed(requestHost, domains))

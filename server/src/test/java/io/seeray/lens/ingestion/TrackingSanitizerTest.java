@@ -108,4 +108,54 @@ class TrackingSanitizerTest {
     void testChineseQuery() {
         assertDoesNotThrow(() -> TrackingSanitizer.url("https://www.geekcorelab.cn/?q=测试", mapper));
     }
+
+    @Test
+    void testQuotedAndSpecialCharacterUrls() {
+        var cleanQuote = TrackingSanitizer.url("https://www.geekcorelab.cn/search?q=\"quarkus\"", mapper);
+        assertNotNull(cleanQuote);
+        assertEquals("www.geekcorelab.cn", cleanQuote.host());
+        assertEquals("/search", cleanQuote.path());
+
+        var cleanSpecial = TrackingSanitizer.url("https://www.geekcorelab.cn/?expr=1<2&foo=bar^baz&code=`echo`", mapper);
+        assertNotNull(cleanSpecial);
+        assertEquals("www.geekcorelab.cn", cleanSpecial.host());
+
+        var cleanJson = TrackingSanitizer.url("https://www.geekcorelab.cn/?filter={\"type\":\"article\"}", mapper);
+        assertNotNull(cleanJson);
+        assertEquals("www.geekcorelab.cn", cleanJson.host());
+    }
+
+    @Test
+    void testRelativeUrlWithBaseOrigin() {
+        var clean = TrackingSanitizer.url("/posts/hello?q=\"world\"", mapper, "Title", null, "https://www.geekcorelab.cn");
+        assertNotNull(clean);
+        assertEquals("www.geekcorelab.cn", clean.host());
+        assertEquals("/posts/hello", clean.path());
+        assertEquals("https", clean.scheme());
+    }
+
+    @Test
+    void testHostWithUnderscore() {
+        var clean = TrackingSanitizer.url("https://host_with_underscore.example.com/api", mapper);
+        assertNotNull(clean);
+        assertEquals("host_with_underscore.example.com", clean.host());
+        assertEquals("/api", clean.path());
+    }
+
+    @Test
+    void testProtocolRelativeUrl() {
+        var clean = TrackingSanitizer.url("//www.geekcorelab.cn/about", mapper);
+        assertNotNull(clean);
+        assertEquals("www.geekcorelab.cn", clean.host());
+        assertEquals("/about", clean.path());
+        assertEquals("https", clean.scheme());
+    }
+
+    @Test
+    void testUserInfoStripped() {
+        var clean = TrackingSanitizer.url("https://admin:secret@www.geekcorelab.cn/dashboard", mapper);
+        assertNotNull(clean);
+        assertEquals("www.geekcorelab.cn", clean.host());
+        assertEquals("/dashboard", clean.path());
+    }
 }

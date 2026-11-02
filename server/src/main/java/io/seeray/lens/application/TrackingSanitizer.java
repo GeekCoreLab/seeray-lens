@@ -10,8 +10,13 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class TrackingSanitizer {
+    private static final Pattern URL_PARSER = Pattern.compile(
+            "^(?:([a-zA-Z][a-zA-Z0-9+.-]*)://)?([^/?#:]+)(?::(\\d+))?(/[^?#]*)?(?:\\?([^#]*))?(?:#(.*))?$");
+
     private static final Set<String> UTM =
             Set.of("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content");
     private static final List<ClickParameter> AD_CLICK_PARAMETERS = List.of(
@@ -46,30 +51,80 @@ public final class TrackingSanitizer {
     }
 
     public static CleanUrl url(String value, ObjectMapper mapper, String title, UUID siteId) {
+        return url(value, mapper, title, siteId, null);
+    }
+
+    public static CleanUrl url(String value, ObjectMapper mapper, String title, UUID siteId, String baseOrigin) {
         String cleanTitle = cleanTitle(title);
         if (value == null || value.isBlank())
             return new CleanUrl(null, null, null, null, null, null, null, null, cleanTitle, null, null, null, null);
         try {
-            URI uri;
-            try {
-                uri = URI.create(value.trim());
-            } catch (IllegalArgumentException e) {
-                String sanitized = value.trim()
-                        .replace(" ", "%20")
-                        .replace("|", "%7C")
-                        .replace("{", "%7B")
-                        .replace("}", "%7D")
-                        .replace("\\", "%5C");
-                uri = URI.create(sanitized);
+            String candidate = value.trim();
+            if (candidate.startsWith("//")) {
+                candidate = "https:" + candidate;
+            } else if (candidate.startsWith("/") && baseOrigin != null && !baseOrigin.isBlank()) {
+                String base = baseOrigin.trim().replaceAll("/+$", "");
+                candidate = base + candidate;
+            } else if (!candidate.contains("://") && baseOrigin != null && !baseOrigin.isBlank()) {
+                String base = baseOrigin.trim().replaceAll("/+$", "");
+                candidate = base + "/" + candidate;
             }
-            if (uri.getScheme() == null || uri.getHost() == null || uri.getUserInfo() != null)
-                throw new IllegalArgumentException();
-            String host = IDN.toASCII(uri.getHost(), IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT);
-            String path = uri.getPath() == null || uri.getPath().isBlank() ? "/" : limit(uri.getPath(), 2048);
+
+            String sanitized = sanitizeUriString(candidate);
+            URI uri = null;
+            try {
+                uri = URI.create(sanitized);
+            } catch (IllegalArgumentException ignored) {
+            }
+
+            String scheme = uri != null ? uri.getScheme() : null;
+            String host = uri != null ? uri.getHost() : null;
+            String path = uri != null ? uri.getPath() : null;
+            String rawQuery = uri != null ? uri.getRawQuery() : null;
+
+            if (host == null && uri != null && uri.getAuthority() != null) {
+                String authority = uri.getAuthority();
+                if (authority.contains("@")) authority = authority.substring(authority.indexOf("@") + 1);
+                if (authority.contains(":")) authority = authority.substring(0, authority.indexOf(":"));
+                if (!authority.isBlank()) host = authority;
+            }
+
+            if (host == null) {
+                Matcher m = URL_PARSER.matcher(sanitized);
+                if (m.matches()) {
+                    if (scheme == null) scheme = m.group(1);
+                    host = m.group(2);
+                    if (path == null) path = m.group(4);
+                    if (rawQuery == null) rawQuery = m.group(5);
+                }
+            }
+
+            if (host == null && baseOrigin != null && !baseOrigin.isBlank()) {
+                try {
+                    URI baseUri = URI.create(sanitizeUriString(baseOrigin.trim()));
+                    host = baseUri.getHost();
+                    if (scheme == null) scheme = baseUri.getScheme();
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (host == null) {
+                throw new IllegalArgumentException("Host cannot be determined");
+            }
+
+            try {
+                host = IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT);
+            } catch (Exception ignored) {
+                host = host.toLowerCase(Locale.ROOT);
+            }
+
+            scheme = scheme != null ? scheme.toLowerCase(Locale.ROOT) : "https";
+            path = path == null || path.isBlank() ? "/" : limit(path, 2048);
+
             Map<String, String> utm = new HashMap<>();
             Map<String, String> query = new HashMap<>();
-            if (uri.getRawQuery() != null) {
-                for (String part : uri.getRawQuery().split("&")) {
+            if (rawQuery != null && !rawQuery.isBlank()) {
+                for (String part : rawQuery.split("&")) {
                     String[] pair = part.split("=", 2);
                     if (pair.length != 2) continue;
                     try {
@@ -88,13 +143,13 @@ public final class TrackingSanitizer {
             }
             ClickParameter clickParameter = null;
             String clickId = null;
-            for (ClickParameter candidate : AD_CLICK_PARAMETERS) {
-                String candidateId = query.get(candidate.parameter());
+            for (ClickParameter candidateClick : AD_CLICK_PARAMETERS) {
+                String candidateId = query.get(candidateClick.parameter());
                 if (candidateId != null
                         && !candidateId.isBlank()
                         && candidateId.length() <= 512
                         && candidateId.chars().noneMatch(Character::isISOControl)) {
-                    clickParameter = candidate;
+                    clickParameter = candidateClick;
                     clickId = candidateId;
                     break;
                 }
@@ -104,7 +159,7 @@ public final class TrackingSanitizer {
             if (clickParameter != null && source == null) source = clickParameter.source();
             if (clickParameter != null && medium == null) medium = clickParameter.medium();
             return new CleanUrl(
-                    uri.getScheme().toLowerCase(Locale.ROOT),
+                    scheme,
                     host,
                     path,
                     source,
@@ -122,9 +177,28 @@ public final class TrackingSanitizer {
         }
     }
 
+    private static String sanitizeUriString(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim().replaceAll("[\\p{Cc}]", "");
+        return s.replace(" ", "%20")
+                .replace("\"", "%22")
+                .replace("<", "%3C")
+                .replace(">", "%3E")
+                .replace("^", "%5E")
+                .replace("`", "%60")
+                .replace("{", "%7B")
+                .replace("}", "%7D")
+                .replace("|", "%7C")
+                .replace("\\", "%5C");
+    }
+
     /** Crash reports intentionally discard query parameters, titles, and UTM values. */
     public static CleanUrl crashUrl(String value, ObjectMapper mapper) {
-        CleanUrl clean = url(value, mapper);
+        return crashUrl(value, mapper, null);
+    }
+
+    public static CleanUrl crashUrl(String value, ObjectMapper mapper, String baseOrigin) {
+        CleanUrl clean = url(value, mapper, null, null, baseOrigin);
         return new CleanUrl(
                 clean.scheme(),
                 clean.host(),
