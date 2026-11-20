@@ -1239,4 +1239,123 @@ describe('tracker package', () => {
     expect((globalThis as Record<string, unknown>).shouldFirePurchaseSnippet).toEqual(expect.any(Function));
     expect(appended).toEqual([{ type: 'text/javascript', textContent: 'window.purchaseSnippet = true;' }]);
   });
+
+  it('collects bounded hardware, network, timing, heap and frame rate performance signals', async () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36',
+      doNotTrack: '0',
+      hardwareConcurrency: 8,
+      deviceMemory: 16,
+      connection: {
+        effectiveType: '4g',
+        downlink: 24.567,
+        rtt: 38.4,
+        saveData: false,
+      },
+    });
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+    });
+    vi.stubGlobal('performance', {
+      getEntriesByType: vi.fn(() => [{
+        activationStart: 100,
+        responseStart: 240.4,
+        domInteractive: 620.2,
+        loadEventEnd: 1350.6,
+      }]),
+      memory: {
+        usedJSHeapSize: 44 * 1024 * 1024,
+        jsHeapSizeLimit: 2048 * 1024 * 1024,
+      },
+    });
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 202 });
+    vi.stubGlobal('fetch', fetch);
+
+    const tracker = new Tracker({ siteId: 'srl_perf_ok' });
+    for (let i = 0; i <= 12; i++) {
+      const cb = rafCallbacks.shift();
+      cb?.(1000 + i * (1000 / 60));
+    }
+    tracker.track('page_view');
+    await tracker.flush();
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body as string);
+    expect(body.events[0].context).toMatchObject({
+      hardwareConcurrency: 8,
+      deviceMemoryGb: 16,
+      connectionType: '4g',
+      connectionDownlinkMbps: 24.57,
+      connectionRttMs: 38,
+      saveData: false,
+      ttfbMs: 140,
+      domInteractiveMs: 520,
+      pageLoadMs: 1251,
+      jsHeapUsedMb: 44,
+      jsHeapLimitMb: 2048,
+      frameRateFps: 60,
+    });
+  });
+
+  it('omits out-of-range device performance signals and cancels rAF sampling on opt-out', async () => {
+    vi.stubGlobal('navigator', {
+      doNotTrack: '0',
+      hardwareConcurrency: 0,
+      deviceMemory: 999,
+      connection: {
+        effectiveType: '5g',
+        downlink: -1,
+        rtt: 120000,
+        saveData: 'yes',
+      },
+    });
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+    });
+    vi.stubGlobal('performance', {
+      getEntriesByType: vi.fn(() => [{
+        activationStart: 0,
+        responseStart: 900000,
+        domInteractive: -10,
+        loadEventEnd: 0,
+      }]),
+      memory: {
+        usedJSHeapSize: -5,
+        jsHeapSizeLimit: 0,
+      },
+    });
+    const cancelRaf = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 42));
+    vi.stubGlobal('cancelAnimationFrame', cancelRaf);
+    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 202 });
+    vi.stubGlobal('fetch', fetch);
+
+    const tracker = new Tracker({ siteId: 'srl_perf_bounds' });
+    tracker.track('page_view');
+    await tracker.flush();
+
+    const ctx = JSON.parse(fetch.mock.calls[0][1].body as string).events[0].context;
+    expect(ctx).not.toHaveProperty('hardwareConcurrency');
+    expect(ctx).not.toHaveProperty('deviceMemoryGb');
+    expect(ctx).not.toHaveProperty('connectionType');
+    expect(ctx).not.toHaveProperty('connectionDownlinkMbps');
+    expect(ctx).not.toHaveProperty('connectionRttMs');
+    expect(ctx).not.toHaveProperty('saveData');
+    expect(ctx).not.toHaveProperty('ttfbMs');
+    expect(ctx).not.toHaveProperty('domInteractiveMs');
+    expect(ctx).not.toHaveProperty('pageLoadMs');
+    expect(ctx).not.toHaveProperty('jsHeapUsedMb');
+    expect(ctx).not.toHaveProperty('jsHeapLimitMb');
+    expect(ctx).not.toHaveProperty('frameRateFps');
+
+    tracker.setConsent(false);
+    expect(cancelRaf).toHaveBeenCalledWith(42);
+  });
 });

@@ -7428,6 +7428,149 @@ class ControlPlaneResourceTest {
                 .body("entries.find { it.resource == 'yandex-webmaster' }.action", is("UPDATE"));
     }
 
+    @Test
+    void collectsScoresAggregatesAndSegmentsVisitorDevicePerformance() throws Exception {
+        Tokens owner = register("devperf-" + System.nanoTime() + "@example.test");
+        String workspaceId = workspace(owner.access()).extract().path("[0].id");
+        String siteId = createSite(owner.access(), workspaceId, "Device Performance Site");
+        String trackingId = given().header("Authorization", "Bearer " + owner.access())
+                .get("/api/v1/sites/" + siteId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("trackingId");
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"host\":\"perf.example.test\",\"enabled\":true}")
+                .post("/api/v1/sites/" + siteId + "/domains")
+                .then()
+                .statusCode(201);
+
+        UUID siteUuid = UUID.fromString(siteId);
+        String highVisitor = "00000000-0000-4000-8000-000000000101";
+        String highSession = "00000000-0000-4000-8000-000000000201";
+        String lowVisitor = "00000000-0000-4000-8000-000000000102";
+        String lowSession = "00000000-0000-4000-8000-000000000202";
+        String highEventId = UUID.randomUUID().toString();
+        String lowEventId = UUID.randomUUID().toString();
+
+        String collectPayload = "{"
+                + "\"schemaVersion\":1,"
+                + "\"siteId\":\"" + trackingId + "\","
+                + "\"events\":["
+                + "{\"eventId\":\"" + highEventId + "\",\"type\":\"page_view\",\"visitorId\":\"" + highVisitor
+                + "\",\"sessionId\":\"" + highSession + "\",\"url\":\"https://perf.example.test/home\","
+                + "\"title\":\"Home\",\"context\":{\"browser\":\"Chrome\",\"browserVersion\":\"132\","
+                + "\"operatingSystem\":\"macOS\",\"deviceType\":\"desktop\",\"hardwareConcurrency\":12,"
+                + "\"deviceMemoryGb\":16.0,\"connectionType\":\"4g\",\"connectionDownlinkMbps\":45.5,"
+                + "\"connectionRttMs\":25,\"saveData\":false,\"ttfbMs\":110,\"domInteractiveMs\":640,"
+                + "\"pageLoadMs\":1050,\"jsHeapUsedMb\":48.5,\"jsHeapLimitMb\":2048.0,\"frameRateFps\":60}},"
+                + "{\"eventId\":\"" + lowEventId + "\",\"type\":\"page_view\",\"visitorId\":\"" + lowVisitor
+                + "\",\"sessionId\":\"" + lowSession + "\",\"url\":\"https://perf.example.test/mobile\","
+                + "\"title\":\"Mobile\",\"context\":{\"browser\":\"Firefox\",\"browserVersion\":\"134\","
+                + "\"operatingSystem\":\"Android\",\"deviceType\":\"mobile\",\"hardwareConcurrency\":2,"
+                + "\"deviceMemoryGb\":1.0,\"connectionType\":\"2g\",\"connectionDownlinkMbps\":0.4,"
+                + "\"connectionRttMs\":620,\"saveData\":true,\"ttfbMs\":2100,\"domInteractiveMs\":6200,"
+                + "\"pageLoadMs\":8500,\"frameRateFps\":22}}"
+                + "]}";
+        given().contentType("application/json")
+                .body(collectPayload)
+                .post("/api/v1/collect")
+                .then()
+                .statusCode(202);
+
+        long deadline = System.currentTimeMillis() + 8_000;
+        long persisted;
+        do {
+            Thread.sleep(250);
+            try (var connection = dataSource.getConnection();
+                    var statement = connection.prepareStatement(
+                            "select count(*) from raw_event where client_event_id in (?,?)")) {
+                statement.setObject(1, UUID.fromString(highEventId));
+                statement.setObject(2, UUID.fromString(lowEventId));
+                try (var rows = statement.executeQuery()) {
+                    rows.next();
+                    persisted = rows.getLong(1);
+                }
+            }
+        } while (persisted < 2 && System.currentTimeMillis() < deadline);
+        assertEquals(2, persisted);
+
+        String today = LocalDate.now(ZoneId.of("UTC")).toString();
+        aggregation.rebuild(siteUuid, LocalDate.parse(today), LocalDate.parse(today));
+
+        String range = "?from=" + today + "&to=" + today;
+        given().header("Authorization", "Bearer " + owner.access())
+                .get("/api/v1/sites/" + siteId + "/analytics/device-performance" + range)
+                .then()
+                .statusCode(200)
+                .body("totalSessions", is(2))
+                .body("measuredSessions", is(2))
+                .body("totalVisitors", is(2))
+                .body("measuredVisitors", is(2))
+                .body("highTierSessions", is(1))
+                .body("mediumTierSessions", is(0))
+                .body("lowTierSessions", is(1))
+                .body("visitors.size()", is(2))
+                .body("visitors.find { it.visitorId == '" + highVisitor + "' }.performanceTier", is("high"))
+                .body("visitors.find { it.visitorId == '" + highVisitor + "' }.hardwareConcurrency", is(12))
+                .body("visitors.find { it.visitorId == '" + lowVisitor + "' }.performanceTier", is("low"))
+                .body("visitors.find { it.visitorId == '" + lowVisitor + "' }.saveData", is(true));
+
+        given().header("Authorization", "Bearer " + owner.access())
+                .get("/api/v1/sites/" + siteId + "/analytics/visitor-log" + range)
+                .then()
+                .statusCode(200)
+                .body("find { it.visitorId == '" + highVisitor + "' }.performanceTier", is("high"))
+                .body("find { it.visitorId == '" + lowVisitor + "' }.hardwareConcurrency", is(2));
+
+        given().header("Authorization", "Bearer " + owner.access())
+                .get("/api/v1/sites/" + siteId + "/analytics/visitors/" + highVisitor + range)
+                .then()
+                .statusCode(200)
+                .body("sessions[0].performanceTier", is("high"))
+                .body("sessions[0].jsHeapLimitMb", is(2048.0f))
+                .body("sessions[0].frameRateFps", is(60));
+
+        given().header("Authorization", "Bearer " + owner.access())
+                .get("/api/v1/sites/" + siteId + "/analytics/realtime?windowMinutes=30&limit=100")
+                .then()
+                .statusCode(200)
+                .body("find { it.visitorId == '" + highVisitor + "' }.performanceTier", is("high"))
+                .body("find { it.visitorId == '" + lowVisitor + "' }.connectionType", is("2g"));
+
+        String segmentId = given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"name\":\"Low tier devices\",\"matchMode\":\"all\",\"enabled\":true,"
+                        + "\"rules\":[{\"field\":\"performance_tier\",\"operator\":\"equals\",\"value\":\"low\"},"
+                        + "{\"field\":\"performance_score\",\"operator\":\"less_than\",\"value\":\"45\"}]}")
+                .post("/api/v1/sites/" + siteId + "/segments")
+                .then()
+                .statusCode(201)
+                .extract()
+                .path("id");
+
+        given().header("Authorization", "Bearer " + owner.access())
+                .get("/api/v1/sites/" + siteId + "/analytics/device-performance" + range + "&segmentId=" + segmentId)
+                .then()
+                .statusCode(200)
+                .body("totalSessions", is(1))
+                .body("lowTierSessions", is(1))
+                .body("visitors.size()", is(1))
+                .body("visitors[0].visitorId", is(lowVisitor));
+
+        given().header("Authorization", "Bearer " + owner.access())
+                .contentType("application/json")
+                .body("{\"dimension\":\"performance_tier\",\"metric\":\"sessions\","
+                        + "\"limit\":10,\"matchMode\":\"all\",\"filters\":[]}")
+                .post("/api/v1/sites/" + siteId + "/analytics/custom-report/query" + range)
+                .then()
+                .statusCode(200)
+                .body("rows.size()", is(2))
+                .body("rows.find { it.dimensionValue == 'high' }.metricValue", is(1.0f))
+                .body("rows.find { it.dimensionValue == 'low' }.metricValue", is(1.0f));
+    }
+
     private static Tokens register(String email) {
         return tokens(
                 "/api/v1/auth/register",

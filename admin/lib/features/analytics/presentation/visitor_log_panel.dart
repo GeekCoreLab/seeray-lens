@@ -7,6 +7,7 @@ import '../application/analytics_controller.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
 import '../application/visitor_profile_controller.dart';
+import 'device_performance_badge.dart';
 import 'timeline_date_formatter.dart';
 import 'visitor_association_controls.dart';
 
@@ -141,7 +142,17 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                           (item.entryPage ?? '').toLowerCase().contains(
                             needle,
                           ) ||
-                          (item.exitPage ?? '').toLowerCase().contains(needle);
+                          (item.exitPage ?? '').toLowerCase().contains(
+                            needle,
+                          ) ||
+                          (item.connectionType ?? '').toLowerCase().contains(
+                            needle,
+                          ) ||
+                          (item.performanceTier != null &&
+                              devicePerformanceTierLabel(
+                                context,
+                                item.performanceTier,
+                              ).toLowerCase().contains(needle));
                     })
                     .toList(growable: false);
                 if (filtered.isEmpty) {
@@ -230,6 +241,14 @@ class _VisitorVisitTile extends StatelessWidget {
         .whereType<String>()
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
+    final perfSummary = formatPerformanceSummaryLine(
+      context,
+      hardwareConcurrency: entry.hardwareConcurrency,
+      deviceMemoryGb: entry.deviceMemoryGb,
+      connectionType: entry.connectionType,
+      pageLoadMs: entry.pageLoadMs,
+      frameRateFps: entry.frameRateFps,
+    );
     return Card(
       margin: const EdgeInsets.only(top: 7),
       elevation: 0,
@@ -258,6 +277,7 @@ class _VisitorVisitTile extends StatelessWidget {
           [
             if (path.isNotEmpty) path.join('  →  '),
             '${formatTimelineTime(context, entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
+            ?perfSummary,
             if (entry.fingerprintRiskLevel != 'none')
               !entry.fingerprintEvidenceTypes.contains('browser') &&
                       entry.fingerprintConfidence == 'low'
@@ -270,13 +290,23 @@ class _VisitorVisitTile extends StatelessWidget {
                       '浏览器指纹匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 账号数：${entry.fingerprintRelatedAccountCount}',
                     ),
           ].join('\n'),
-          maxLines: 2,
+          maxLines: perfSummary != null ? 3 : 2,
           overflow: TextOverflow.ellipsis,
         ),
         isThreeLine: true,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (entry.performanceScore != null ||
+                entry.performanceTier != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: DevicePerformanceTierBadge(
+                  tier: entry.performanceTier,
+                  score: entry.performanceScore,
+                  compact: true,
+                ),
+              ),
             if (entry.fingerprintRiskLevel != 'none')
               Tooltip(
                 message: context.tr('Fingerprint risk signal', '指纹风险信号'),

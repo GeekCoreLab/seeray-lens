@@ -31,6 +31,8 @@ public class CustomReportService {
             Map.entry("browser", "s.browser"),
             Map.entry("operating_system", "s.operating_system"),
             Map.entry("device_type", "s.device_type"),
+            Map.entry("performance_tier", "s.performance_tier"),
+            Map.entry("connection_type", "s.connection_type"),
             Map.entry("language", "s.language"),
             Map.entry("country", "s.country_code"),
             Map.entry("region", "coalesce(s.region_name,s.region_code)"),
@@ -105,7 +107,7 @@ public class CustomReportService {
                         + "s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,"
                         + "s.entry_page,s.exit_page,s.entry_page_title,s.exit_page_title,s.initial_referrer_host,"
                         + "s.initial_page_host,s.initial_utm_source,s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,"
-                        + "s.browser,s.operating_system,s.device_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
+                        + "s.browser,s.operating_system,s.device_type,s.performance_tier,s.connection_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
                         + "from analytics_session s where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
                         + filter.expression() + ")) select " + dimension + " dimension_value," + metric
                         + " metric_value "
@@ -203,7 +205,7 @@ public class CustomReportService {
                         + "s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,"
                         + "s.entry_page,s.exit_page,s.entry_page_title,s.exit_page_title,s.initial_referrer_host,"
                         + "s.initial_page_host,s.initial_utm_source,s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,"
-                        + "s.browser,s.operating_system,s.device_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
+                        + "s.browser,s.operating_system,s.device_type,s.performance_tier,s.connection_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
                         + "from analytics_session s where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
                         + filter.expression() + ")) select " + expressions.get(0) + " dimension_value,"
                         + expressions.get(1) + " secondary_dimension_value," + expressions.get(2)
@@ -326,7 +328,7 @@ public class CustomReportService {
                         + "s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,"
                         + "s.entry_page,s.exit_page,s.entry_page_title,s.exit_page_title,s.initial_referrer_host,"
                         + "s.initial_page_host,s.initial_utm_source,s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,"
-                        + "s.browser,s.operating_system,s.device_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
+                        + "s.browser,s.operating_system,s.device_type,s.performance_tier,s.connection_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
                         + "from analytics_session s where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
                         + filter.expression() + ")) select " + projection
                         + "," + metric + " metric_value from matching_sessions s group by 1,2,3,4 "
@@ -468,7 +470,7 @@ public class CustomReportService {
                         + "s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,"
                         + "s.entry_page,s.exit_page,s.entry_page_title,s.exit_page_title,s.initial_referrer_host,"
                         + "s.initial_page_host,s.initial_utm_source,s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,"
-                        + "s.browser,s.operating_system,s.device_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
+                        + "s.browser,s.operating_system,s.device_type,s.performance_tier,s.connection_type,s.language,s.country_code,s.region_code,s.region_name,s.city "
                         + "from analytics_session s where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
                         + filter.expression() + ")) select " + dimension + " dimension_value," + secondaryDimension
                         + " secondary_dimension_value," + metric
@@ -699,7 +701,7 @@ public class CustomReportService {
                 + "s.client_session_id,s.started_at,s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,"
                 + "s.is_bounce,s.visitor_type,s.entry_page,s.exit_page,s.entry_page_title,s.exit_page_title,"
                 + "s.initial_referrer_host,s.initial_page_host,s.initial_utm_source,s.initial_utm_medium,"
-                + "s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,s.browser,s.operating_system,s.device_type,s.language,s.country_code,"
+                + "s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,s.browser,s.operating_system,s.device_type,s.performance_tier,s.connection_type,s.language,s.country_code,"
                 + "s.region_code,s.region_name,s.city from analytics_session s join analytics_visitor v "
                 + "on v.id=s.visitor_id and v.site_id=s.site_id where s.site_id=? "
                 + "and (s.started_at at time zone ?)::date between ? and ? and (" + filter.expression() + "))";

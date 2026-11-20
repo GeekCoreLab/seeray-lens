@@ -9,6 +9,7 @@ import '../application/analytics_controller.dart';
 import '../application/analytics_annotations.dart';
 import '../application/analytics_insights.dart';
 import '../application/analytics_range.dart';
+import '../application/device_performance_controller.dart';
 import '../application/form_analytics.dart';
 import '../application/media_analytics.dart';
 import '../application/crash_analytics.dart';
@@ -43,6 +44,8 @@ class SiteTabShell extends ConsumerWidget {
         ? SiteTopTab.cohorts
         : path.endsWith('/visitors/technology')
         ? SiteTopTab.technology
+        : path.endsWith('/visitors/device-performance')
+        ? SiteTopTab.devicePerformance
         : path.endsWith('/visitors/locations')
         ? SiteTopTab.locations
         : path.contains('/visitors/') || path.endsWith('/visitors')
@@ -103,6 +106,7 @@ class SiteTabShell extends ConsumerWidget {
           SiteTopTab.visitTime,
           SiteTopTab.cohorts,
           SiteTopTab.technology,
+          SiteTopTab.devicePerformance,
           SiteTopTab.locations,
           SiteTopTab.acquisition,
           SiteTopTab.behaviour,
@@ -156,6 +160,7 @@ class SiteTabShell extends ConsumerWidget {
                 ref.invalidate(analyticsDashboardRangeProvider);
                 ref.invalidate(analyticsDashboardProvider);
                 ref.invalidate(analyticsTechnologyProvider);
+                ref.invalidate(analyticsDevicePerformanceProvider);
                 ref.invalidate(analyticsVisitTimeProvider);
                 ref.invalidate(analyticsVisitorInterestProvider);
                 ref.invalidate(analyticsCohortProvider);

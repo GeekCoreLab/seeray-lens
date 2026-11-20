@@ -23,6 +23,13 @@ class AnalyticsVisitorLogEntry {
     required this.ipAddress,
     required this.tlsFingerprintGroup,
     required this.browserFingerprintGroup,
+    this.performanceScore,
+    this.performanceTier,
+    this.hardwareConcurrency,
+    this.deviceMemoryGb,
+    this.connectionType,
+    this.pageLoadMs,
+    this.frameRateFps,
   });
 
   final String visitorId;
@@ -43,6 +50,13 @@ class AnalyticsVisitorLogEntry {
   final String? ipAddress;
   final String? tlsFingerprintGroup;
   final String? browserFingerprintGroup;
+  final int? performanceScore;
+  final String? performanceTier;
+  final int? hardwareConcurrency;
+  final double? deviceMemoryGb;
+  final String? connectionType;
+  final int? pageLoadMs;
+  final int? frameRateFps;
 
   factory AnalyticsVisitorLogEntry.fromJson(
     Map<String, dynamic> json,
@@ -70,6 +84,13 @@ class AnalyticsVisitorLogEntry {
     ipAddress: json['ipAddress'] as String?,
     tlsFingerprintGroup: json['tlsFingerprintGroup'] as String?,
     browserFingerprintGroup: json['browserFingerprintGroup'] as String?,
+    performanceScore: (json['performanceScore'] as num?)?.toInt(),
+    performanceTier: json['performanceTier'] as String?,
+    hardwareConcurrency: (json['hardwareConcurrency'] as num?)?.toInt(),
+    deviceMemoryGb: (json['deviceMemoryGb'] as num?)?.toDouble(),
+    connectionType: json['connectionType'] as String?,
+    pageLoadMs: (json['pageLoadMs'] as num?)?.toInt(),
+    frameRateFps: (json['frameRateFps'] as num?)?.toInt(),
   );
 }
 
@@ -307,6 +328,20 @@ class AnalyticsVisitorProfileSession {
     required this.campaignMedium,
     required this.campaignName,
     required this.ipAddress,
+    this.performanceScore,
+    this.performanceTier,
+    this.hardwareConcurrency,
+    this.deviceMemoryGb,
+    this.connectionType,
+    this.connectionDownlinkMbps,
+    this.connectionRttMs,
+    this.saveData,
+    this.ttfbMs,
+    this.domInteractiveMs,
+    this.pageLoadMs,
+    this.jsHeapUsedMb,
+    this.jsHeapLimitMb,
+    this.frameRateFps,
   });
 
   final String sessionId;
@@ -331,6 +366,20 @@ class AnalyticsVisitorProfileSession {
   final String? campaignMedium;
   final String? campaignName;
   final String? ipAddress;
+  final int? performanceScore;
+  final String? performanceTier;
+  final int? hardwareConcurrency;
+  final double? deviceMemoryGb;
+  final String? connectionType;
+  final double? connectionDownlinkMbps;
+  final int? connectionRttMs;
+  final bool? saveData;
+  final int? ttfbMs;
+  final int? domInteractiveMs;
+  final int? pageLoadMs;
+  final double? jsHeapUsedMb;
+  final double? jsHeapLimitMb;
+  final int? frameRateFps;
 
   factory AnalyticsVisitorProfileSession.fromJson(Map<String, dynamic> json) =>
       AnalyticsVisitorProfileSession(
@@ -358,6 +407,21 @@ class AnalyticsVisitorProfileSession {
         campaignMedium: json['campaignMedium'] as String?,
         campaignName: json['campaignName'] as String?,
         ipAddress: json['ipAddress'] as String?,
+        performanceScore: (json['performanceScore'] as num?)?.toInt(),
+        performanceTier: json['performanceTier'] as String?,
+        hardwareConcurrency: (json['hardwareConcurrency'] as num?)?.toInt(),
+        deviceMemoryGb: (json['deviceMemoryGb'] as num?)?.toDouble(),
+        connectionType: json['connectionType'] as String?,
+        connectionDownlinkMbps:
+            (json['connectionDownlinkMbps'] as num?)?.toDouble(),
+        connectionRttMs: (json['connectionRttMs'] as num?)?.toInt(),
+        saveData: json['saveData'] as bool?,
+        ttfbMs: (json['ttfbMs'] as num?)?.toInt(),
+        domInteractiveMs: (json['domInteractiveMs'] as num?)?.toInt(),
+        pageLoadMs: (json['pageLoadMs'] as num?)?.toInt(),
+        jsHeapUsedMb: (json['jsHeapUsedMb'] as num?)?.toDouble(),
+        jsHeapLimitMb: (json['jsHeapLimitMb'] as num?)?.toDouble(),
+        frameRateFps: (json['frameRateFps'] as num?)?.toInt(),
       );
 }
 

@@ -53,5 +53,17 @@ public record TrackingPayload(
             @Min(1) @Max(10000) Integer screenHeight,
             @Min(1) @Max(10000) Integer viewportWidth,
             @Min(1) @Max(10000) Integer viewportHeight,
-            @DecimalMin("0.25") @DecimalMax("8.0") Double pixelRatio) {}
+            @DecimalMin("0.25") @DecimalMax("8.0") Double pixelRatio,
+            @Min(1) @Max(256) Integer hardwareConcurrency,
+            @DecimalMin("0.25") @DecimalMax("128.0") Double deviceMemoryGb,
+            @Pattern(regexp = "^(slow-2g|2g|3g|4g)$") String connectionType,
+            @DecimalMin("0.0") @DecimalMax("10000.0") Double connectionDownlinkMbps,
+            @Min(0) @Max(60000) Integer connectionRttMs,
+            Boolean saveData,
+            @Min(0) @Max(600000) Integer ttfbMs,
+            @Min(0) @Max(600000) Integer domInteractiveMs,
+            @Min(0) @Max(600000) Integer pageLoadMs,
+            @DecimalMin("0.0") @DecimalMax("65536.0") Double jsHeapUsedMb,
+            @DecimalMin("0.0") @DecimalMax("65536.0") Double jsHeapLimitMb,
+            @Min(1) @Max(240) Integer frameRateFps) {}
 }

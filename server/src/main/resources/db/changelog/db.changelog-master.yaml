@@ -573,3 +573,10 @@ databaseChangeLog:
         - sqlFile:
             path: db/changelog/0082-site-ip-lookup.sql
             relativeToChangelogFile: false
+  - changeSet:
+      id: 0083-device-performance
+      author: seeray
+      changes:
+        - sqlFile:
+            path: db/changelog/0083-device-performance.sql
+            relativeToChangelogFile: false

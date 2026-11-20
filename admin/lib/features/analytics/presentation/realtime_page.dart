@@ -7,6 +7,7 @@ import '../../../core/i18n/app_i18n.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/realtime_controller.dart';
+import 'device_performance_badge.dart';
 import 'merged_timeline_action.dart';
 import 'timeline_date_formatter.dart';
 import 'visitor_association_controls.dart';
@@ -289,6 +290,14 @@ class _LiveVisitCard extends StatelessWidget {
       tlsFingerprintGroup: visitor.tlsFingerprintGroup,
       browserFingerprintGroup: visitor.browserFingerprintGroup,
     );
+    final perfChips = formatDeviceHardwareChips(
+      context,
+      hardwareConcurrency: visitor.hardwareConcurrency,
+      deviceMemoryGb: visitor.deviceMemoryGb,
+      connectionType: visitor.connectionType,
+      pageLoadMs: visitor.pageLoadMs,
+      frameRateFps: visitor.frameRateFps,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -349,6 +358,15 @@ class _LiveVisitCard extends StatelessWidget {
                 time: visitor.lastActivityAt,
                 countryCode: visitor.countryCode,
               ),
+              if (visitor.performanceScore != null ||
+                  visitor.performanceTier != null)
+                DevicePerformanceTierBadge(
+                  tier: visitor.performanceTier,
+                  score: visitor.performanceScore,
+                  compact: true,
+                ),
+              for (final chip in perfChips)
+                _InfoChip(icon: chip.icon, text: chip.label),
             ],
           ),
           const SizedBox(height: 12),

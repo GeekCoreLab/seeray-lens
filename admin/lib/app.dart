@@ -19,6 +19,7 @@ import 'features/analytics/presentation/recordings_page.dart';
 import 'features/analytics/presentation/custom_dimensions_page.dart';
 import 'features/analytics/presentation/segments_page.dart';
 import 'features/analytics/presentation/technology_page.dart';
+import 'features/analytics/presentation/device_performance_page.dart';
 import 'features/analytics/presentation/visit_time_page.dart';
 import 'features/analytics/presentation/visitor_interest_page.dart';
 import 'features/analytics/presentation/locations_page.dart';
@@ -253,6 +254,18 @@ class SeeRayLensAdminApp extends ConsumerStatefulWidget {
               state,
               _Authenticated(
                 child: TechnologyPage(
+                  siteId: state.pathParameters['siteId']!,
+                  embedded: true,
+                ),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/sites/:siteId/visitors/device-performance',
+            pageBuilder: (context, state) => _siteTabPage(
+              state,
+              _Authenticated(
+                child: DevicePerformancePage(
                   siteId: state.pathParameters['siteId']!,
                   embedded: true,
                 ),

@@ -16,6 +16,7 @@ enum SiteTopTab {
   visitTime,
   cohorts,
   technology,
+  devicePerformance,
   locations,
   acquisition,
   attribution,
@@ -129,6 +130,7 @@ class SiteTopBar extends StatelessWidget implements PreferredSizeWidget {
       padding: const EdgeInsets.only(right: 8),
       child: PopupMenuButton<SiteTopTab>(
         tooltip: context.tr(group.english, group.chinese),
+        constraints: const BoxConstraints(minWidth: 220, maxWidth: 320),
         onSelected: (tab) => _go(context, tab),
         itemBuilder: (context) => [
           for (final item in group.items)
@@ -143,7 +145,12 @@ class SiteTopBar extends StatelessWidget implements PreferredSizeWidget {
                     size: 16,
                   ),
                   const SizedBox(width: 8),
-                  Text(context.tr(item.english, item.chinese)),
+                  Expanded(
+                    child: Text(
+                      context.tr(item.english, item.chinese),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -241,6 +248,12 @@ const _siteNavGroups = <_SiteNavGroup>[
       'Technology',
       '访客技术',
       'visitors/technology',
+    ),
+    _SiteNavItem(
+      SiteTopTab.devicePerformance,
+      'Device performance',
+      '设备性能',
+      'visitors/device-performance',
     ),
     _SiteNavItem(SiteTopTab.locations, 'Locations', '地域', 'visitors/locations'),
   ]),

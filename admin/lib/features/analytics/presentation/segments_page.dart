@@ -919,6 +919,13 @@ class _RuleEditor extends StatelessWidget {
     'viewport_width': 'Viewport width (px)',
     'viewport_height': 'Viewport height (px)',
     'pixel_ratio': 'Pixel ratio',
+    'performance_tier': 'Performance tier',
+    'performance_score': 'Performance score (0-100)',
+    'hardware_concurrency': 'CPU cores',
+    'device_memory_gb': 'Device memory (GB)',
+    'connection_type': 'Connection type',
+    'page_load_ms': 'Page load time (ms)',
+    'frame_rate_fps': 'Frame rate (FPS)',
     'event_type': 'Event type',
     'page_path': 'Event page',
   };
@@ -937,6 +944,11 @@ class _RuleEditor extends StatelessWidget {
     'viewport_width',
     'viewport_height',
     'pixel_ratio',
+    'performance_score',
+    'hardware_concurrency',
+    'device_memory_gb',
+    'page_load_ms',
+    'frame_rate_fps',
   }.contains(rule['field']);
   bool get _boolean => rule['field'] == 'bounce';
   List<String> get _operators => _numeric
@@ -984,6 +996,13 @@ class _RuleEditor extends StatelessWidget {
           'viewport_width' => '视口宽度（像素）',
           'viewport_height' => '视口高度（像素）',
           'pixel_ratio' => '像素比',
+          'performance_tier' => '设备性能等级',
+          'performance_score' => '设备性能分（0-100）',
+          'hardware_concurrency' => 'CPU 核心数',
+          'device_memory_gb' => '设备内存（GB）',
+          'connection_type' => '网络类型',
+          'page_load_ms' => '页面加载耗时（毫秒）',
+          'frame_rate_fps' => '渲染帧率（FPS）',
           'event_type' => '事件类型',
           'page_path' => '事件页面',
           _ => '自定义属性',
@@ -1149,11 +1168,19 @@ class _RuleEditor extends StatelessWidget {
       key: ValueKey('value-${rule['field']}-${rule['operator']}'),
       initialValue: value,
       keyboardType: _numeric
-          ? TextInputType.numberWithOptions(decimal: field == 'pixel_ratio')
+          ? TextInputType.numberWithOptions(
+              decimal: field == 'pixel_ratio' || field == 'device_memory_gb',
+            )
           : TextInputType.text,
       decoration: InputDecoration(
         labelText: context.tr('Value', '值'),
-        hintText: _numeric ? '0' : null,
+        hintText: _numeric
+            ? '0'
+            : field == 'performance_tier'
+            ? 'high / medium / low'
+            : field == 'connection_type'
+            ? '4g / 3g / 2g / slow-2g'
+            : null,
       ),
       onChanged: (next) => onChanged({...rule, 'value': next}),
     );
@@ -1203,6 +1230,20 @@ class _RuleEditor extends StatelessWidget {
       ? '768'
       : field == 'pixel_ratio'
       ? '1'
+      : field == 'performance_score'
+      ? '75'
+      : field == 'hardware_concurrency'
+      ? '4'
+      : field == 'device_memory_gb'
+      ? '4'
+      : field == 'page_load_ms'
+      ? '3000'
+      : field == 'frame_rate_fps'
+      ? '30'
+      : field == 'performance_tier'
+      ? 'low'
+      : field == 'connection_type'
+      ? '4g'
       : field == 'visitor_type'
       ? 'new'
       : '';

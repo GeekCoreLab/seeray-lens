@@ -43,6 +43,8 @@ public class SegmentService {
             "region",
             "city",
             "geo_timezone",
+            "performance_tier",
+            "connection_type",
             "custom_property");
     private static final Set<String> NUMERIC_FIELDS = Set.of(
             "page_views",
@@ -52,7 +54,12 @@ public class SegmentService {
             "screen_height",
             "viewport_width",
             "viewport_height",
-            "pixel_ratio");
+            "pixel_ratio",
+            "performance_score",
+            "hardware_concurrency",
+            "device_memory_gb",
+            "page_load_ms",
+            "frame_rate_fps");
 
     private final DataSource dataSource;
     private final ObjectMapper mapper;
@@ -313,7 +320,7 @@ public class SegmentService {
     }
 
     private String matchingSessions(Criteria criteria) {
-        return "with matching_sessions as (select s.id,s.site_id,s.visitor_id,s.identity_key,v.client_visitor_id,s.client_session_id,s.started_at,s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,s.entry_page,s.exit_page,s.initial_utm_source,s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,s.initial_referrer_host,s.initial_page_host,s.browser,s.browser_version,s.operating_system,s.operating_system_version,s.device_type,s.language,s.screen_width,s.screen_height,s.viewport_width,s.viewport_height,s.pixel_ratio,s.country_code,s.continent_code,s.region_code,s.region_name,s.city,s.geo_timezone from analytics_session s join analytics_visitor v on v.id=s.visitor_id and v.site_id=s.site_id where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
+        return "with matching_sessions as (select s.id,s.site_id,s.visitor_id,s.identity_key,v.client_visitor_id,s.client_session_id,s.started_at,s.last_activity_at,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,s.entry_page,s.exit_page,s.initial_utm_source,s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,s.initial_referrer_host,s.initial_page_host,s.browser,s.browser_version,s.operating_system,s.operating_system_version,s.device_type,s.language,s.screen_width,s.screen_height,s.viewport_width,s.viewport_height,s.pixel_ratio,s.country_code,s.continent_code,s.region_code,s.region_name,s.city,s.geo_timezone,s.hardware_concurrency,s.device_memory_gb,s.connection_type,s.page_load_ms,s.frame_rate_fps,s.performance_score,s.performance_tier from analytics_session s join analytics_visitor v on v.id=s.visitor_id and v.site_id=s.site_id where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
                 + criteria.expression() + "))";
     }
 
@@ -403,6 +410,13 @@ public class SegmentService {
                     case "viewport_width" -> "s.viewport_width";
                     case "viewport_height" -> "s.viewport_height";
                     case "pixel_ratio" -> "s.pixel_ratio";
+                    case "performance_tier" -> "s.performance_tier";
+                    case "connection_type" -> "s.connection_type";
+                    case "performance_score" -> "s.performance_score";
+                    case "hardware_concurrency" -> "s.hardware_concurrency";
+                    case "device_memory_gb" -> "s.device_memory_gb";
+                    case "page_load_ms" -> "s.page_load_ms";
+                    case "frame_rate_fps" -> "s.frame_rate_fps";
                     default -> throw invalid();
                 };
         if (operator.equals("is_set")) return column + " is not null and " + column + " <> ''";
@@ -412,7 +426,10 @@ public class SegmentService {
             return column + (operator.equals("does_not_equal") ? " <> ?" : " = ?");
         }
         if (NUMERIC_FIELDS.contains(field)) {
-            values.add(field.equals("pixel_ratio") ? Double.parseDouble(value) : numericValue(field, value));
+            values.add(
+                    field.equals("pixel_ratio") || field.equals("device_memory_gb")
+                            ? Double.parseDouble(value)
+                            : numericValue(field, value));
             return column
                     + switch (operator) {
                         case "equals" -> " = ?";
@@ -484,15 +501,29 @@ public class SegmentService {
                         if (ratio.scale() > 3
                                 || ratio.compareTo(new java.math.BigDecimal("0.25")) < 0
                                 || ratio.compareTo(new java.math.BigDecimal("8.0")) > 0) throw invalid();
+                    } else if (field.equals("device_memory_gb")) {
+                        java.math.BigDecimal memory = new java.math.BigDecimal(rule.value());
+                        if (memory.scale() > 2
+                                || memory.compareTo(new java.math.BigDecimal("0.25")) < 0
+                                || memory.compareTo(new java.math.BigDecimal("128.0")) > 0) throw invalid();
                     } else {
                         int count = Integer.parseInt(rule.value());
                         int maximum =
                                 switch (field) {
                                     case "visit_duration" -> 86_400;
                                     case "screen_width", "screen_height", "viewport_width", "viewport_height" -> 10_000;
+                                    case "performance_score" -> 100;
+                                    case "hardware_concurrency" -> 256;
+                                    case "page_load_ms" -> 600_000;
+                                    case "frame_rate_fps" -> 240;
                                     default -> 1_000_000;
                                 };
-                        int minimum = field.startsWith("screen_") || field.startsWith("viewport_") ? 1 : 0;
+                        int minimum = field.startsWith("screen_")
+                                        || field.startsWith("viewport_")
+                                        || field.equals("hardware_concurrency")
+                                        || field.equals("frame_rate_fps")
+                                ? 1
+                                : 0;
                         if (count < minimum || count > maximum) throw invalid();
                     }
                 } catch (Exception error) {

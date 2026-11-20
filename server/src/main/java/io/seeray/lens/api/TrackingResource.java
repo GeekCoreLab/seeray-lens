@@ -290,6 +290,18 @@ public class TrackingResource {
         put(value, "viewportWidth", context.viewportWidth());
         put(value, "viewportHeight", context.viewportHeight());
         put(value, "pixelRatio", context.pixelRatio());
+        put(value, "hardwareConcurrency", context.hardwareConcurrency());
+        put(value, "deviceMemoryGb", context.deviceMemoryGb());
+        put(value, "connectionType", context.connectionType());
+        put(value, "connectionDownlinkMbps", context.connectionDownlinkMbps());
+        put(value, "connectionRttMs", context.connectionRttMs());
+        put(value, "saveData", context.saveData());
+        put(value, "ttfbMs", context.ttfbMs());
+        put(value, "domInteractiveMs", context.domInteractiveMs());
+        put(value, "pageLoadMs", context.pageLoadMs());
+        put(value, "jsHeapUsedMb", context.jsHeapUsedMb());
+        put(value, "jsHeapLimitMb", context.jsHeapLimitMb());
+        put(value, "frameRateFps", context.frameRateFps());
         return value;
     }
 

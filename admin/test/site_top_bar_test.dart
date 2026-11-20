@@ -38,6 +38,7 @@ void main() {
 
     expect(find.text('Engagement'), findsOneWidget);
     expect(find.text('Visit time'), findsOneWidget);
+    expect(find.text('Device performance'), findsOneWidget);
     expect(find.text('Locations'), findsOneWidget);
   });
 }

@@ -171,7 +171,8 @@ public class AnalyticsQueryService {
                 """
                 select v.client_visitor_id,s.client_session_id,host(s.client_ip),s.started_at,s.last_activity_at,s.entry_page,s.exit_page,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,
                   (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='ja4' order by o.observed_at desc limit 1),
-                  (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1)
+                  (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1),
+                  s.performance_score,s.performance_tier,s.hardware_concurrency,s.device_memory_gb,s.connection_type,s.page_load_ms,s.frame_rate_fps
                 from analytics_session s join analytics_visitor v on v.id=s.visitor_id
                 where s.site_id=? and (s.started_at at time zone (select timezone from site where id=?))::date between ? and ?
                 order by s.started_at desc limit ?
@@ -210,7 +211,14 @@ public class AnalyticsQueryService {
                             risk.evidenceTypes(),
                             r.getString(3),
                             null,
-                            null));
+                            null,
+                            nullableInt(r, 15),
+                            r.getString(16),
+                            nullableInt(r, 17),
+                            nullableDouble(r, 18),
+                            r.getString(19),
+                            nullableInt(r, 20),
+                            nullableInt(r, 21)));
                     signals.add(new VisitorAssociationGroups.Signal(recordKey, r.getString(13), r.getString(14)));
                 }
             }
@@ -281,6 +289,21 @@ public class AnalyticsQueryService {
                     event_data->'context' context
                   from session_events where event_type='page_view'
                   order by client_visitor_id,client_session_id,received_at,ingest_id
+                ), session_performance as (
+                  select client_visitor_id,client_session_id,
+                    (array_agg(event_data->'context'->>'hardwareConcurrency' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'hardwareConcurrency','') is not null))[1] hw_cores,
+                    (array_agg(event_data->'context'->>'deviceMemoryGb' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'deviceMemoryGb','') is not null))[1] mem_gb,
+                    (array_agg(event_data->'context'->>'connectionType' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'connectionType','') is not null))[1] conn_type,
+                    (array_agg(event_data->'context'->>'connectionDownlinkMbps' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'connectionDownlinkMbps','') is not null))[1] downlink_mbps,
+                    (array_agg(event_data->'context'->>'connectionRttMs' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'connectionRttMs','') is not null))[1] rtt_ms,
+                    (array_agg(event_data->'context'->>'saveData' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'saveData','') is not null))[1] save_data,
+                    (array_agg(event_data->'context'->>'ttfbMs' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'ttfbMs','') is not null))[1] ttfb_ms,
+                    (array_agg(event_data->'context'->>'domInteractiveMs' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'domInteractiveMs','') is not null))[1] dom_interactive_ms,
+                    (array_agg(event_data->'context'->>'pageLoadMs' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'pageLoadMs','') is not null))[1] page_load_ms,
+                    (array_agg(event_data->'context'->>'jsHeapUsedMb' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'jsHeapUsedMb','') is not null))[1] js_heap_used_mb,
+                    (array_agg(event_data->'context'->>'jsHeapLimitMb' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'jsHeapLimitMb','') is not null))[1] js_heap_limit_mb,
+                    (array_agg(event_data->'context'->>'frameRateFps' order by received_at,ingest_id) filter(where nullif(event_data->'context'->>'frameRateFps','') is not null))[1] frame_rate_fps
+                  from session_events group by client_visitor_id,client_session_id
                 ), active_browser_ids as (
                   select distinct client_visitor_id from active_sessions
                 ), browser_session_identities as (
@@ -305,12 +328,15 @@ public class AnalyticsQueryService {
                 select s.client_visitor_id,s.client_session_id,s.started_at,s.last_activity_at,s.event_count,s.page_views,
                   s.entry_page,l.event_type,l.page_path,l.page_title,c.context->>'countryCode',c.context->>'region',
                   c.context->>'city',c.context->>'browser',c.context->>'operatingSystem',c.context->>'deviceType',
-                  c.context->>'language',coalesce(a.actions_json,'[]'),s.identity_rank=1,i.ip_address,f.tls_key,f.browser_key
+                  c.context->>'language',coalesce(a.actions_json,'[]'),s.identity_rank=1,i.ip_address,f.tls_key,f.browser_key,
+                  p.hw_cores,p.mem_gb,p.conn_type,p.downlink_mbps,p.rtt_ms,p.save_data,p.ttfb_ms,p.dom_interactive_ms,
+                  p.page_load_ms,p.js_heap_used_mb,p.js_heap_limit_mb,p.frame_rate_fps
                 from ranked_sessions s join latest_event l using(client_visitor_id,client_session_id)
                   left join visit_context c using(client_visitor_id,client_session_id)
                   left join actions a using(client_visitor_id,client_session_id)
                   left join latest_ip i using(client_visitor_id,client_session_id)
                   left join fingerprints f using(client_visitor_id,client_session_id)
+                  left join session_performance p using(client_visitor_id,client_session_id)
                 order by s.last_activity_at desc,s.client_visitor_id
                 """;
         List<LiveVisitorRow> visitorRows = new ArrayList<>();
@@ -331,6 +357,20 @@ public class AnalyticsQueryService {
                     } catch (Exception invalidActions) {
                         actions = List.of();
                     }
+                    DevicePerformanceScorer.Metrics perfMetrics = DevicePerformanceScorer.fromStrings(
+                            rows.getString(23),
+                            rows.getString(24),
+                            rows.getString(25),
+                            rows.getString(26),
+                            rows.getString(27),
+                            rows.getString(28),
+                            rows.getString(29),
+                            rows.getString(30),
+                            rows.getString(31),
+                            rows.getString(32),
+                            rows.getString(33),
+                            rows.getString(34));
+                    DevicePerformanceScorer.Rating perfRating = DevicePerformanceScorer.evaluate(perfMetrics);
                     visitorRows.add(new LiveVisitorRow(
                             new LiveVisitor(
                                     rows.getString(1),
@@ -355,7 +395,14 @@ public class AnalyticsQueryService {
                                     rows.getBoolean(19),
                                     rows.getString(20),
                                     null,
-                                    null),
+                                    null,
+                                    perfRating.score(),
+                                    perfRating.tier(),
+                                    perfMetrics.hardwareConcurrency(),
+                                    perfMetrics.deviceMemoryGb(),
+                                    perfMetrics.connectionType(),
+                                    perfMetrics.pageLoadMs(),
+                                    perfMetrics.frameRateFps()),
                             rows.getString(21),
                             rows.getString(22)));
                 }
@@ -434,6 +481,21 @@ public class AnalyticsQueryService {
         return total == 0 ? 0d : (double) value / total;
     }
 
+    static Integer nullableInt(ResultSet row, int column) throws SQLException {
+        Object value = row.getObject(column);
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    static Double nullableDouble(ResultSet row, int column) throws SQLException {
+        Object value = row.getObject(column);
+        return value instanceof Number number ? number.doubleValue() : null;
+    }
+
+    static Boolean nullableBoolean(ResultSet row, int column) throws SQLException {
+        Object value = row.getObject(column);
+        return value instanceof Boolean flag ? flag : null;
+    }
+
     private interface Row<T> {
         T map(ResultSet row) throws SQLException;
     }
@@ -508,7 +570,14 @@ public class AnalyticsQueryService {
             List<String> fingerprintEvidenceTypes,
             String ipAddress,
             String tlsFingerprintGroup,
-            String browserFingerprintGroup) {
+            String browserFingerprintGroup,
+            Integer performanceScore,
+            String performanceTier,
+            Integer hardwareConcurrency,
+            Double deviceMemoryGb,
+            String connectionType,
+            Integer pageLoadMs,
+            Integer frameRateFps) {
         VisitorLog withFingerprintGroups(VisitorAssociationGroups.Labels labels) {
             return new VisitorLog(
                     visitorId,
@@ -529,7 +598,14 @@ public class AnalyticsQueryService {
                     fingerprintEvidenceTypes,
                     ipAddress,
                     labels == null ? null : labels.tlsFingerprintGroup(),
-                    labels == null ? null : labels.browserFingerprintGroup());
+                    labels == null ? null : labels.browserFingerprintGroup(),
+                    performanceScore,
+                    performanceTier,
+                    hardwareConcurrency,
+                    deviceMemoryGb,
+                    connectionType,
+                    pageLoadMs,
+                    frameRateFps);
         }
 
         public VisitorLog(
@@ -560,6 +636,13 @@ public class AnalyticsQueryService {
                     null,
                     "none",
                     List.of(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
                     null,
                     null,
                     null);
@@ -619,7 +702,21 @@ public class AnalyticsQueryService {
             String campaignSource,
             String campaignMedium,
             String campaignName,
-            String ipAddress) {}
+            String ipAddress,
+            Integer performanceScore,
+            String performanceTier,
+            Integer hardwareConcurrency,
+            Double deviceMemoryGb,
+            String connectionType,
+            Double connectionDownlinkMbps,
+            Integer connectionRttMs,
+            Boolean saveData,
+            Integer ttfbMs,
+            Integer domInteractiveMs,
+            Integer pageLoadMs,
+            Double jsHeapUsedMb,
+            Double jsHeapLimitMb,
+            Integer frameRateFps) {}
 
     public record VisitorProfileAction(Instant at, String eventType, String path, String title, String sessionId) {}
 
@@ -665,7 +762,14 @@ public class AnalyticsQueryService {
             boolean uniqueIdentity,
             String ipAddress,
             String tlsFingerprintGroup,
-            String browserFingerprintGroup) {
+            String browserFingerprintGroup,
+            Integer performanceScore,
+            String performanceTier,
+            Integer hardwareConcurrency,
+            Double deviceMemoryGb,
+            String connectionType,
+            Integer pageLoadMs,
+            Integer frameRateFps) {
         LiveVisitor withFingerprintGroups(VisitorAssociationGroups.Labels labels) {
             return new LiveVisitor(
                     visitorId,
@@ -690,7 +794,14 @@ public class AnalyticsQueryService {
                     uniqueIdentity,
                     ipAddress,
                     labels == null ? null : labels.tlsFingerprintGroup(),
-                    labels == null ? null : labels.browserFingerprintGroup());
+                    labels == null ? null : labels.browserFingerprintGroup(),
+                    performanceScore,
+                    performanceTier,
+                    hardwareConcurrency,
+                    deviceMemoryGb,
+                    connectionType,
+                    pageLoadMs,
+                    frameRateFps);
         }
     }
 }

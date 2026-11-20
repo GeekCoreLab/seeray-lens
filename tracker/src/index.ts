@@ -46,7 +46,32 @@ export interface TrackerPlugin {
 export interface TrackerOptions { siteId: string; endpoint?: string; apiOrigin?: string; credentials?: RequestCredentials; maxBatchSize?: number; flushInterval?: number; requireConsent?: boolean; fingerprintRisk?: boolean; trackDownloads?: boolean; trackOutlinks?: boolean; trackForms?: boolean; trackMedia?: boolean; trackErrors?: boolean; crashRelease?: string; tagManager?: boolean; tagManagerEnvironment?: string; tagManagerPreview?: TagManagerPreviewOptions; experiments?: boolean; webVitals?: boolean; heatmap?: HeatmapOptions; plugins?: TrackerPlugin[]; }
 export interface SiteSearchOptions extends Omit<TrackOptions, 'category' | 'action' | 'name' | 'properties'> { category?: string; resultsCount?: number; }
 export interface ContentTrackingOptions extends Omit<TrackOptions, 'category' | 'action' | 'name' | 'properties'> { piece?: string; target?: string; interaction?: string; }
-interface ClientContext { browser: string; browserVersion?: string; operatingSystem: string; operatingSystemVersion?: string; deviceType: string; language?: string; screenWidth?: number; screenHeight?: number; viewportWidth?: number; viewportHeight?: number; pixelRatio?: number; }
+type ConnectionType = 'slow-2g' | '2g' | '3g' | '4g';
+interface ClientContext {
+  browser: string;
+  browserVersion?: string;
+  operatingSystem: string;
+  operatingSystemVersion?: string;
+  deviceType: string;
+  language?: string;
+  screenWidth?: number;
+  screenHeight?: number;
+  viewportWidth?: number;
+  viewportHeight?: number;
+  pixelRatio?: number;
+  hardwareConcurrency?: number;
+  deviceMemoryGb?: number;
+  connectionType?: ConnectionType;
+  connectionDownlinkMbps?: number;
+  connectionRttMs?: number;
+  saveData?: boolean;
+  ttfbMs?: number;
+  domInteractiveMs?: number;
+  pageLoadMs?: number;
+  jsHeapUsedMb?: number;
+  jsHeapLimitMb?: number;
+  frameRateFps?: number;
+}
 interface FingerprintPayload { algorithmVersion: 1; signalHash: string; stability: 'high' | 'medium' | 'low'; }
 interface EventPayload extends TrackOptions { eventId: string; type: string; occurredAt: string; visitorId?: string; sessionId?: string; userId?: string; context: ClientContext; fingerprint?: FingerprintPayload; }
 interface HeatmapConfig { enabled: boolean; sampleRate: number; version?: number; autoSnapshotEnabled: boolean; recordingEnabled: boolean; recordingSampleRate: number; }
@@ -128,8 +153,20 @@ export const resolveApiOrigin = (scriptSrc?: string): string | undefined => {
 };
 const ignored = (target: EventTarget | null): boolean => target instanceof Element && !!target.closest('[data-seeray-heatmap-ignore]');
 const fixed = (target: EventTarget | null): boolean => { for (let e = target instanceof Element ? target : null; e; e = e.parentElement) { const p = globalThis.getComputedStyle?.(e).position; if (p === 'fixed' || p === 'sticky') return true; } return false; };
+const CONNECTION_TYPES = new Set<ConnectionType>(['slow-2g', '2g', '3g', '4g']);
+const boundedInt = (value: unknown, min: number, max: number): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const rounded = Math.round(value);
+  return rounded >= min && rounded <= max ? rounded : undefined;
+};
+const boundedDecimal = (value: unknown, min: number, max: number, decimals: number): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) return undefined;
+  const factor = 10 ** decimals;
+  const rounded = Math.round(value * factor) / factor;
+  return rounded >= min && rounded <= max ? rounded : undefined;
+};
 const majorVersion = (ua: string, expression: RegExp): string | undefined => expression.exec(ua)?.[1];
-const clientContext = (): ClientContext => {
+const clientContext = (measuredFps?: number): ClientContext => {
   const nav = globalThis.navigator;
   const ua = nav?.userAgent ?? '';
   let browser = 'Other';
@@ -152,6 +189,68 @@ const clientContext = (): ClientContext => {
   const deviceType = isTablet ? 'tablet' : /Mobile|iPhone|iPod|Android/i.test(ua) ? 'mobile' : ua ? 'desktop' : 'other';
   const screen = globalThis.screen;
   const width = (value: number | undefined): number | undefined => Number.isFinite(value) && value! > 0 && value! <= 10000 ? Math.round(value!) : undefined;
+  let hardwareConcurrency: number | undefined;
+  let deviceMemoryGb: number | undefined;
+  try {
+    hardwareConcurrency = boundedInt(nav?.hardwareConcurrency, 1, 256);
+    deviceMemoryGb = boundedDecimal((nav as (Navigator & { deviceMemory?: unknown }) | undefined)?.deviceMemory, 0.25, 128, 2);
+  } catch { /* Restricted hardware APIs must not interrupt tracking. */ }
+  let connectionType: ConnectionType | undefined;
+  let connectionDownlinkMbps: number | undefined;
+  let connectionRttMs: number | undefined;
+  let saveData: boolean | undefined;
+  try {
+    const conn = (nav as (Navigator & {
+      connection?: { effectiveType?: unknown; downlink?: unknown; rtt?: unknown; saveData?: unknown };
+    }) | undefined)?.connection;
+    if (conn) {
+      if (typeof conn.effectiveType === 'string' && CONNECTION_TYPES.has(conn.effectiveType as ConnectionType)) {
+        connectionType = conn.effectiveType as ConnectionType;
+      }
+      connectionDownlinkMbps = boundedDecimal(conn.downlink, 0, 10000, 2);
+      connectionRttMs = boundedInt(conn.rtt, 0, 60000);
+      if (typeof conn.saveData === 'boolean') saveData = conn.saveData;
+    }
+  } catch { /* Restricted network APIs must not interrupt tracking. */ }
+  let ttfbMs: number | undefined;
+  let domInteractiveMs: number | undefined;
+  let pageLoadMs: number | undefined;
+  try {
+    const navEntry = globalThis.performance?.getEntriesByType?.('navigation')?.[0] as
+      | (PerformanceNavigationTiming & { activationStart?: unknown })
+      | undefined;
+    if (navEntry) {
+      const activationStart = typeof navEntry.activationStart === 'number'
+        && Number.isFinite(navEntry.activationStart)
+        && navEntry.activationStart >= 0
+        ? navEntry.activationStart
+        : 0;
+      if (typeof navEntry.responseStart === 'number' && navEntry.responseStart > 0) {
+        ttfbMs = boundedInt(Math.max(0, navEntry.responseStart - activationStart), 0, 600000);
+      }
+      if (typeof navEntry.domInteractive === 'number' && navEntry.domInteractive > 0) {
+        domInteractiveMs = boundedInt(Math.max(0, navEntry.domInteractive - activationStart), 0, 600000);
+      }
+      if (typeof navEntry.loadEventEnd === 'number' && navEntry.loadEventEnd > 0) {
+        pageLoadMs = boundedInt(Math.max(0, navEntry.loadEventEnd - activationStart), 0, 600000);
+      }
+    }
+  } catch { /* Restricted navigation timing must not interrupt tracking. */ }
+  let jsHeapUsedMb: number | undefined;
+  let jsHeapLimitMb: number | undefined;
+  try {
+    const mem = (globalThis.performance as (Performance & {
+      memory?: { usedJSHeapSize?: unknown; jsHeapSizeLimit?: unknown };
+    }) | undefined)?.memory;
+    if (mem) {
+      if (typeof mem.usedJSHeapSize === 'number' && Number.isFinite(mem.usedJSHeapSize) && mem.usedJSHeapSize >= 0) {
+        jsHeapUsedMb = boundedDecimal(mem.usedJSHeapSize / 1048576, 0, 65536, 1);
+      }
+      if (typeof mem.jsHeapSizeLimit === 'number' && Number.isFinite(mem.jsHeapSizeLimit) && mem.jsHeapSizeLimit > 0) {
+        jsHeapLimitMb = boundedDecimal(mem.jsHeapSizeLimit / 1048576, 0, 65536, 1);
+      }
+    }
+  } catch { /* Restricted performance memory must not interrupt tracking. */ }
   return {
     browser,
     browserVersion,
@@ -164,6 +263,18 @@ const clientContext = (): ClientContext => {
     viewportWidth: width(globalThis.innerWidth),
     viewportHeight: width(globalThis.innerHeight),
     pixelRatio: Number.isFinite(globalThis.devicePixelRatio) && globalThis.devicePixelRatio > 0 ? Math.min(8, globalThis.devicePixelRatio) : undefined,
+    hardwareConcurrency,
+    deviceMemoryGb,
+    connectionType,
+    connectionDownlinkMbps,
+    connectionRttMs,
+    saveData,
+    ttfbMs,
+    domInteractiveMs,
+    pageLoadMs,
+    jsHeapUsedMb,
+    jsHeapLimitMb,
+    frameRateFps: boundedInt(measuredFps, 1, 240),
   };
 };
 
@@ -247,7 +358,7 @@ export class Tracker {
   private readonly tagManagerPreviewToken?: string;
   private queue: EventPayload[] = []; private timer: ReturnType<typeof setTimeout> | undefined; private currentPageStartedAt: number | undefined; private pageViewRecorded = false; private userId: string | undefined; private fingerprint: FingerprintPayload | undefined;
   private heatmapConfig: HeatmapConfig | undefined; private heatmapQueue: HeatmapEvent[] = []; private heatmapTimer: ReturnType<typeof setTimeout> | undefined; private heatmapInstance: string | undefined; private heatmapUrl = ''; private heatmapLayoutVersion = 'unversioned'; private heatmapSelected = false; private heatmapNavigating = false;
-  private moveCount = 0; private clickCount = 0; private dropped = 0; private moveTruncated = false; private clickTruncated = false; private lastMove = 0; private listenersInstalled = false; private behaviourListenerInstalled = false; private siteSearchListenerInstalled = false; private contentListenerInstalled = false; private formListenerInstalled = false; private mediaListenerInstalled = false; private errorListenerInstalled = false; private webVitalsStarted = false; private historyInstalled = false; private navigationSerial = 0; private layoutTimer: ReturnType<typeof setTimeout> | undefined; private heatmapRetry: HeatmapBatch | undefined; private heatmapFlushInFlight = false; private resizeObserver: ResizeObserver | undefined; private contentObserver: IntersectionObserver | undefined; private formViewObserver: IntersectionObserver | undefined; private formMutationObserver: MutationObserver | undefined; private contentSeen = new WeakSet<Element>(); private contentObserved = new WeakSet<Element>(); private formSeen = new WeakSet<Element>(); private formStarted = new WeakSet<Element>(); private interactedFormFields = new WeakSet<Element>(); private activeFormFields = new WeakMap<Element, { formId: string; startedAt: number; fieldType: string }>(); private mediaStarted = new WeakSet<Element>(); private mediaCompleted = new WeakSet<Element>(); private mediaMilestones = new WeakMap<Element, Set<number>>(); private recordingSelected = false; private recorderStop: (() => void) | undefined;
+  private moveCount = 0; private clickCount = 0; private dropped = 0; private moveTruncated = false; private clickTruncated = false; private lastMove = 0; private listenersInstalled = false; private behaviourListenerInstalled = false; private siteSearchListenerInstalled = false; private contentListenerInstalled = false; private formListenerInstalled = false; private mediaListenerInstalled = false; private errorListenerInstalled = false; private webVitalsStarted = false; private fpsSampleStarted = false; private fpsRafId: number | undefined; private measuredFps: number | undefined; private historyInstalled = false; private navigationSerial = 0; private layoutTimer: ReturnType<typeof setTimeout> | undefined; private heatmapRetry: HeatmapBatch | undefined; private heatmapFlushInFlight = false; private resizeObserver: ResizeObserver | undefined; private contentObserver: IntersectionObserver | undefined; private formViewObserver: IntersectionObserver | undefined; private formMutationObserver: MutationObserver | undefined; private contentSeen = new WeakSet<Element>(); private contentObserved = new WeakSet<Element>(); private formSeen = new WeakSet<Element>(); private formStarted = new WeakSet<Element>(); private interactedFormFields = new WeakSet<Element>(); private activeFormFields = new WeakMap<Element, { formId: string; startedAt: number; fieldType: string }>(); private mediaStarted = new WeakSet<Element>(); private mediaCompleted = new WeakSet<Element>(); private mediaMilestones = new WeakMap<Element, Set<number>>(); private recordingSelected = false; private recorderStop: (() => void) | undefined;
   private readonly containers = new Map<string, ContainerRegistration>(); private readonly scrollBins = new Map<string, Set<number>>(); private readonly lastScroll = new Map<string, number>();
   private readonly layoutSegments = new Map<string, string>();
   private tagDefinitions: TagDefinition[] = [];
@@ -339,6 +450,10 @@ export class Tracker {
       this.mediaStarted = new WeakSet<Element>();
       this.mediaCompleted = new WeakSet<Element>();
       this.mediaMilestones = new WeakMap<Element, Set<number>>();
+      if (this.fpsRafId !== undefined) globalThis.cancelAnimationFrame?.(this.fpsRafId);
+      this.fpsRafId = undefined;
+      this.measuredFps = undefined;
+      this.fpsSampleStarted = false;
       this.stopRecorder();
       this.removeStoredIdentity();
       this.useEphemeralIdentity();
@@ -765,7 +880,7 @@ export class Tracker {
       visitorId: options.anonymous ? undefined : this.visitorId,
       sessionId: options.anonymous ? undefined : this.sessionId,
       userId: options.anonymous ? undefined : this.userId,
-      context: clientContext(),
+      context: clientContext(this.measuredFps),
       fingerprint: options.anonymous ? undefined : this.fingerprint,
     };
     this.queue.push(event);
@@ -797,6 +912,7 @@ export class Tracker {
     // Register metric listeners before unload flush listeners so final CLS/INP
     // callbacks can enqueue their sample while the page is still active.
     this.startWebVitals();
+    this.startFpsSampling();
     this.installSiteSearchListener();
     this.installContentTracking();
     this.refreshContentTracking(true);
@@ -1088,6 +1204,9 @@ export class Tracker {
       'Screen Height': context.screenHeight,
       'Viewport Width': context.viewportWidth,
       'Viewport Height': context.viewportHeight,
+      'CPU Cores': context.hardwareConcurrency,
+      'Device Memory (GB)': context.deviceMemoryGb,
+      'Connection Type': context.connectionType,
     };
     if (Object.prototype.hasOwnProperty.call(known, name)) return known[name];
     const propertyMatch = /^Event Property:\s*(.+)$/.exec(name);
@@ -1192,6 +1311,33 @@ export class Tracker {
     } catch {
       // A CSP or malformed snippet must not disable ordinary analytics.
     }
+  }
+  private startFpsSampling(): void {
+    if (this.fpsSampleStarted || !this.collectionAllowed() || !globalThis.document
+      || typeof globalThis.requestAnimationFrame !== 'function') return;
+    this.fpsSampleStarted = true;
+    let start: number | undefined;
+    let frames = 0;
+    const step = (timestamp: number): void => {
+      this.fpsRafId = undefined;
+      if (!this.collectionAllowed() || globalThis.document?.visibilityState === 'hidden') return;
+      if (!Number.isFinite(timestamp)) return;
+      if (start === undefined) {
+        start = timestamp;
+        this.fpsRafId = globalThis.requestAnimationFrame(step);
+        return;
+      }
+      frames++;
+      const elapsed = timestamp - start;
+      if (frames >= 12 || (frames >= 4 && elapsed >= 500)) {
+        if (elapsed > 0) {
+          this.measuredFps = boundedInt((frames * 1000) / elapsed, 1, 240);
+        }
+        return;
+      }
+      this.fpsRafId = globalThis.requestAnimationFrame(step);
+    };
+    this.fpsRafId = globalThis.requestAnimationFrame(step);
   }
   private startWebVitals(): void {
     if (!this.options.webVitals || this.webVitalsStarted || !this.collectionAllowed()

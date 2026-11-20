@@ -86,11 +86,74 @@ void main() {
 
     router.dispose();
   });
+
+  testWidgets('renders device performance metrics on visitor log and profile', (
+    tester,
+  ) async {
+    ReferrerFaviconCache.fetcherOverrideForTest = (_) async => null;
+    ReferrerFaviconCache.clearForTest();
+    addTearDown(() {
+      ReferrerFaviconCache.fetcherOverrideForTest = null;
+      ReferrerFaviconCache.clearForTest();
+    });
+    tester.view.physicalSize = const Size(1280, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _VisitorApi(includePerformance: true);
+    final router = GoRouter(
+      initialLocation: '/sites/site-1/visitors',
+      routes: [
+        GoRoute(
+          path: '/sites/:siteId/visitors',
+          builder: (context, state) => Scaffold(
+            body: ListView(
+              children: [
+                VisitorLogPanel(siteId: state.pathParameters['siteId']!),
+              ],
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/sites/:siteId/visitors/:visitorId',
+          builder: (context, state) => VisitorProfilePage(
+            siteId: state.pathParameters['siteId']!,
+            visitorId: state.pathParameters['visitorId']!,
+            embedded: true,
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [apiProvider.overrideWithValue(api)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('High · 91'), findsOneWidget);
+    expect(find.textContaining('8 cores'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ListTile, '203.0.113.45'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Device performance'), findsOneWidget);
+    expect(find.text('High · 91'), findsNWidgets(2));
+    expect(find.text('8 cores'), findsOneWidget);
+    expect(find.text('16 GB RAM'), findsOneWidget);
+    expect(find.text('60 FPS'), findsOneWidget);
+    expect(find.text('Heap 48/2048 MB'), findsOneWidget);
+
+    router.dispose();
+  });
 }
 
 class _VisitorApi extends SeeRayApi {
-  _VisitorApi();
+  _VisitorApi({this.includePerformance = false});
 
+  final bool includePerformance;
   String? profilePath;
   String? historyPath;
 
@@ -116,6 +179,15 @@ class _VisitorApi extends SeeRayApi {
           'durationMs': 180000,
           'bounce': false,
           'visitorType': 'returning',
+          if (includePerformance) ...{
+            'performanceScore': 91,
+            'performanceTier': 'high',
+            'hardwareConcurrency': 8,
+            'deviceMemoryGb': 16.0,
+            'connectionType': '4g',
+            'pageLoadMs': 1200,
+            'frameRateFps': 60,
+          },
         },
       ];
     }
@@ -190,6 +262,22 @@ class _VisitorApi extends SeeRayApi {
             'campaignSource': 'newsletter',
             'campaignMedium': 'email',
             'campaignName': 'September',
+            if (includePerformance) ...{
+              'performanceScore': 91,
+              'performanceTier': 'high',
+              'hardwareConcurrency': 8,
+              'deviceMemoryGb': 16.0,
+              'connectionType': '4g',
+              'connectionDownlinkMbps': 35.0,
+              'connectionRttMs': 25,
+              'saveData': false,
+              'ttfbMs': 120,
+              'domInteractiveMs': 700,
+              'pageLoadMs': 1200,
+              'jsHeapUsedMb': 48.0,
+              'jsHeapLimitMb': 2048.0,
+              'frameRateFps': 60,
+            },
           },
         ],
         'hasMoreSessions': true,

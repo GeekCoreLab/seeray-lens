@@ -59,6 +59,8 @@ public class DashboardService {
             "browser",
             "operating_system",
             "device_type",
+            "performance_tier",
+            "connection_type",
             "language",
             "country",
             "region",

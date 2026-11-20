@@ -1,5 +1,10 @@
 package io.seeray.lens.application;
 
+import static io.seeray.lens.application.AnalyticsQueryService.nullableBoolean;
+import static io.seeray.lens.application.AnalyticsQueryService.nullableDouble;
+import static io.seeray.lens.application.AnalyticsQueryService.nullableInt;
+
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import io.seeray.lens.domain.common.ControlPlaneException;
 import io.seeray.lens.domain.site.Site;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -564,7 +569,8 @@ public class SegmentedAnalyticsQueryService {
                 + " select client_visitor_id,client_session_id,client_ip,started_at,last_activity_at,entry_page,exit_page,page_view_count,event_count,"
                 + "duration_ms,is_bounce,visitor_type,"
                 + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='ja4' order by o.observed_at desc limit 1),"
-                + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1)"
+                + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1),"
+                + "performance_score,performance_tier,hardware_concurrency,device_memory_gb,connection_type,page_load_ms,frame_rate_fps"
                 + " from matching_sessions order by started_at desc limit ?";
         List<VisitorLogRow> rows = list(
                 context,
@@ -590,7 +596,14 @@ public class SegmentedAnalyticsQueryService {
                                 List.of(),
                                 row.getString(3),
                                 null,
-                                null),
+                                null,
+                                nullableInt(row, 15),
+                                row.getString(16),
+                                nullableInt(row, 17),
+                                nullableDouble(row, 18),
+                                row.getString(19),
+                                nullableInt(row, 20),
+                                nullableInt(row, 21)),
                         row.getString(13),
                         row.getString(14),
                         row.getString(1) + "|" + row.getString(2)));
@@ -666,35 +679,10 @@ public class SegmentedAnalyticsQueryService {
         List<AnalyticsQueryService.VisitorProfileSession> sessions = list(
                 context,
                 cte(context)
-                        + " select client_session_id,started_at,last_activity_at,entry_page,exit_page,page_view_count,"
-                        + "event_count,duration_ms,is_bounce,visitor_type,browser,operating_system,device_type,language,"
-                        + "country_code,region_name,city,initial_referrer_host,initial_utm_source,initial_utm_medium,"
-                        + "initial_utm_campaign,client_ip from matching_sessions where " + profilePredicate + " "
-                        + "order by started_at desc,client_session_id limit ?",
+                        + " select " + VISITOR_PROFILE_SESSION_COLUMNS + " from matching_sessions where "
+                        + profilePredicate + " order by started_at desc,client_session_id limit ?",
                 withLimit(profileParameters, sessionLimit + 1),
-                row -> new AnalyticsQueryService.VisitorProfileSession(
-                        row.getString(1),
-                        row.getTimestamp(2).toInstant(),
-                        row.getTimestamp(3).toInstant(),
-                        row.getString(4),
-                        row.getString(5),
-                        row.getInt(6),
-                        row.getInt(7),
-                        row.getLong(8),
-                        row.getBoolean(9),
-                        row.getString(10),
-                        row.getString(11),
-                        row.getString(12),
-                        row.getString(13),
-                        row.getString(14),
-                        row.getString(15),
-                        row.getString(16),
-                        row.getString(17),
-                        row.getString(18),
-                        row.getString(19),
-                        row.getString(20),
-                        row.getString(21),
-                        row.getString(22)));
+                SegmentedAnalyticsQueryService::mapVisitorProfileSession);
         boolean hasMoreSessions = sessions.size() > sessionLimit;
         if (hasMoreSessions) sessions.remove(sessions.size() - 1);
         String nextSessionsCursor = hasMoreSessions
@@ -801,11 +789,8 @@ public class SegmentedAnalyticsQueryService {
             sessions = list(
                     context,
                     cte(context)
-                            + " select client_session_id,started_at,last_activity_at,entry_page,exit_page,page_view_count,"
-                            + "event_count,duration_ms,is_bounce,visitor_type,browser,operating_system,device_type,language,"
-                            + "country_code,region_name,city,initial_referrer_host,initial_utm_source,initial_utm_medium,"
-                            + "initial_utm_campaign,client_ip from matching_sessions where " + profilePredicate
-                            + sessionCursorPredicate
+                            + " select " + VISITOR_PROFILE_SESSION_COLUMNS + " from matching_sessions where "
+                            + profilePredicate + sessionCursorPredicate
                             + " order by started_at desc,client_session_id limit ?",
                     sessionParameters,
                     SegmentedAnalyticsQueryService::mapVisitorProfileSession);
@@ -930,6 +915,14 @@ public class SegmentedAnalyticsQueryService {
     private record VisitorLogRow(
             AnalyticsQueryService.VisitorLog entry, String tlsKey, String browserKey, String recordKey) {}
 
+    private static final String VISITOR_PROFILE_SESSION_COLUMNS =
+            "client_session_id,started_at,last_activity_at,entry_page,exit_page,page_view_count,"
+                    + "event_count,duration_ms,is_bounce,visitor_type,browser,operating_system,device_type,language,"
+                    + "country_code,region_name,city,initial_referrer_host,initial_utm_source,initial_utm_medium,"
+                    + "initial_utm_campaign,client_ip,performance_score,performance_tier,hardware_concurrency,"
+                    + "device_memory_gb,connection_type,connection_downlink_mbps,connection_rtt_ms,save_data,"
+                    + "ttfb_ms,dom_interactive_ms,page_load_ms,js_heap_used_mb,js_heap_limit_mb,frame_rate_fps";
+
     private static AnalyticsQueryService.VisitorProfileSession mapVisitorProfileSession(ResultSet row)
             throws SQLException {
         return new AnalyticsQueryService.VisitorProfileSession(
@@ -954,7 +947,21 @@ public class SegmentedAnalyticsQueryService {
                 row.getString(19),
                 row.getString(20),
                 row.getString(21),
-                row.getString(22));
+                row.getString(22),
+                nullableInt(row, 23),
+                row.getString(24),
+                nullableInt(row, 25),
+                nullableDouble(row, 26),
+                row.getString(27),
+                nullableDouble(row, 28),
+                nullableInt(row, 29),
+                nullableBoolean(row, 30),
+                nullableInt(row, 31),
+                nullableInt(row, 32),
+                nullableInt(row, 33),
+                nullableDouble(row, 34),
+                nullableDouble(row, 35),
+                nullableInt(row, 36));
     }
 
     public List<AnalyticsQueryService.Goal> goals(UUID siteId, AnalyticsQueryService.Range range, UUID segmentId) {
@@ -1013,6 +1020,175 @@ public class SegmentedAnalyticsQueryService {
                 List.of(),
                 row -> new AnalyticsQueryService.Technology(
                         row.getString(1), row.getString(2), row.getLong(3), row.getLong(4)));
+    }
+
+    /** Summarizes device performance scores, hardware/network/runtime distributions, and per-visitor profiles. */
+    public DevicePerformanceReport devicePerformance(
+            UUID siteId, AnalyticsQueryService.Range range, UUID segmentId, int requestedLimit) {
+        QueryContext context = context(siteId, range, segmentId);
+        int limit = Math.max(1, Math.min(requestedLimit, 200));
+
+        String summarySql = cte(context)
+                + " select count(*),"
+                + "count(*) filter(where performance_score is not null),"
+                + "count(distinct identity_key),"
+                + "count(distinct identity_key) filter(where performance_score is not null),"
+                + "avg(performance_score)::double precision,"
+                + "(percentile_cont(0.5) within group (order by performance_score))::double precision,"
+                + "count(*) filter(where performance_tier='high'),"
+                + "count(*) filter(where performance_tier='medium'),"
+                + "count(*) filter(where performance_tier='low'),"
+                + "avg(hardware_concurrency)::double precision,"
+                + "avg(device_memory_gb)::double precision,"
+                + "(percentile_cont(0.75) within group (order by page_load_ms))::double precision,"
+                + "(percentile_cont(0.75) within group (order by dom_interactive_ms))::double precision,"
+                + "(percentile_cont(0.75) within group (order by ttfb_ms))::double precision,"
+                + "avg(frame_rate_fps)::double precision "
+                + "from matching_sessions";
+        DevicePerformanceSummary summary = single(
+                context,
+                summarySql,
+                List.of(),
+                row -> new DevicePerformanceSummary(
+                        row.getLong(1),
+                        row.getLong(2),
+                        row.getLong(3),
+                        row.getLong(4),
+                        nullableDouble(row, 5),
+                        nullableDouble(row, 6),
+                        row.getLong(7),
+                        row.getLong(8),
+                        row.getLong(9),
+                        nullableDouble(row, 10),
+                        nullableDouble(row, 11),
+                        nullableDouble(row, 12),
+                        nullableDouble(row, 13),
+                        nullableDouble(row, 14),
+                        nullableDouble(row, 15)));
+
+        String distributionsSql = cte(context)
+                + ", buckets as ("
+                + "select 'tier'::text dimension,coalesce(nullif(performance_tier,''),'unknown') label,"
+                + "case performance_tier when 'high' then 1 when 'medium' then 2 when 'low' then 3 else 4 end sort_order,"
+                + "count(*) sessions,count(distinct identity_key) visitors,avg(performance_score)::double precision avg_score "
+                + "from matching_sessions group by 2,3 "
+                + "union all "
+                + "select 'cpu',case when hardware_concurrency is null then 'Unknown' "
+                + "when hardware_concurrency<=2 then '1–2 cores' when hardware_concurrency<=4 then '3–4 cores' "
+                + "when hardware_concurrency<=8 then '5–8 cores' when hardware_concurrency<=16 then '9–16 cores' "
+                + "else '17+ cores' end,"
+                + "case when hardware_concurrency is null then 6 when hardware_concurrency<=2 then 1 "
+                + "when hardware_concurrency<=4 then 2 when hardware_concurrency<=8 then 3 "
+                + "when hardware_concurrency<=16 then 4 else 5 end,"
+                + "count(*),count(distinct identity_key),avg(performance_score)::double precision "
+                + "from matching_sessions group by 2,3 "
+                + "union all "
+                + "select 'memory',case when device_memory_gb is null then 'Unknown' "
+                + "when device_memory_gb<=1.0 then '≤1 GB' when device_memory_gb<=2.0 then '2 GB' "
+                + "when device_memory_gb<=4.0 then '4 GB' when device_memory_gb<=8.0 then '8 GB' "
+                + "else '>8 GB' end,"
+                + "case when device_memory_gb is null then 6 when device_memory_gb<=1.0 then 1 "
+                + "when device_memory_gb<=2.0 then 2 when device_memory_gb<=4.0 then 3 "
+                + "when device_memory_gb<=8.0 then 4 else 5 end,"
+                + "count(*),count(distinct identity_key),avg(performance_score)::double precision "
+                + "from matching_sessions group by 2,3 "
+                + "union all "
+                + "select 'network',coalesce(nullif(connection_type,''),'Unknown'),"
+                + "case connection_type when '4g' then 1 when '3g' then 2 when '2g' then 3 "
+                + "when 'slow-2g' then 4 else 5 end,"
+                + "count(*),count(distinct identity_key),avg(performance_score)::double precision "
+                + "from matching_sessions group by 2,3 "
+                + "union all "
+                + "select 'load_time',case when page_load_ms is null then 'Unknown' "
+                + "when page_load_ms<1500 then '<1.5s' when page_load_ms<3000 then '1.5–3s' "
+                + "when page_load_ms<5000 then '3–5s' else '5s+' end,"
+                + "case when page_load_ms is null then 5 when page_load_ms<1500 then 1 "
+                + "when page_load_ms<3000 then 2 when page_load_ms<5000 then 3 else 4 end,"
+                + "count(*),count(distinct identity_key),avg(performance_score)::double precision "
+                + "from matching_sessions group by 2,3 "
+                + "union all "
+                + "select 'fps',case when frame_rate_fps is null then 'Unknown' "
+                + "when frame_rate_fps>=55 then '55+ fps' when frame_rate_fps>=30 then '30–54 fps' "
+                + "else '<30 fps' end,"
+                + "case when frame_rate_fps is null then 4 when frame_rate_fps>=55 then 1 "
+                + "when frame_rate_fps>=30 then 2 else 3 end,"
+                + "count(*),count(distinct identity_key),avg(performance_score)::double precision "
+                + "from matching_sessions group by 2,3) "
+                + "select dimension,label,sessions,visitors,avg_score from buckets order by dimension,sort_order,label";
+        Map<String, List<DevicePerformanceBucket>> groupedBuckets = new LinkedHashMap<>();
+        list(context, distributionsSql, List.of(), row -> {
+            String dimension = row.getString(1);
+            groupedBuckets
+                    .computeIfAbsent(dimension, ignored -> new ArrayList<>())
+                    .add(new DevicePerformanceBucket(
+                            row.getString(2), row.getLong(3), row.getLong(4), nullableDouble(row, 5)));
+            return null;
+        });
+
+        String visitorsSql = cte(context)
+                + ", visitor_stats as (select identity_key,count(*)::bigint sessions,max(last_activity_at) last_seen_at "
+                + "from matching_sessions group by identity_key), "
+                + "representative_session as (select distinct on (identity_key) identity_key,client_visitor_id,client_ip,"
+                + "browser,operating_system,device_type,performance_score,performance_tier,hardware_concurrency,"
+                + "device_memory_gb,connection_type,connection_downlink_mbps,connection_rtt_ms,save_data,ttfb_ms,"
+                + "dom_interactive_ms,page_load_ms,js_heap_used_mb,js_heap_limit_mb,frame_rate_fps "
+                + "from matching_sessions order by identity_key,(performance_score is not null) desc,last_activity_at desc,id desc) "
+                + "select r.client_visitor_id,r.client_ip,vs.last_seen_at,vs.sessions,r.browser,r.operating_system,"
+                + "r.device_type,r.performance_score,r.performance_tier,r.hardware_concurrency,r.device_memory_gb,"
+                + "r.connection_type,r.connection_downlink_mbps,r.connection_rtt_ms,r.save_data,r.ttfb_ms,"
+                + "r.dom_interactive_ms,r.page_load_ms,r.js_heap_used_mb,r.js_heap_limit_mb,r.frame_rate_fps "
+                + "from visitor_stats vs join representative_session r using(identity_key) "
+                + "order by vs.last_seen_at desc,r.client_visitor_id asc limit ?";
+        List<VisitorDevicePerformance> visitors = list(
+                context,
+                visitorsSql,
+                List.of(limit),
+                row -> new VisitorDevicePerformance(
+                        row.getString(1),
+                        row.getString(2),
+                        row.getTimestamp(3).toInstant(),
+                        row.getLong(4),
+                        row.getString(5),
+                        row.getString(6),
+                        row.getString(7),
+                        nullableInt(row, 8),
+                        row.getString(9),
+                        nullableInt(row, 10),
+                        nullableDouble(row, 11),
+                        row.getString(12),
+                        nullableDouble(row, 13),
+                        nullableInt(row, 14),
+                        nullableBoolean(row, 15),
+                        nullableInt(row, 16),
+                        nullableInt(row, 17),
+                        nullableInt(row, 18),
+                        nullableDouble(row, 19),
+                        nullableDouble(row, 20),
+                        nullableInt(row, 21)));
+
+        return new DevicePerformanceReport(
+                summary.totalSessions(),
+                summary.measuredSessions(),
+                summary.totalVisitors(),
+                summary.measuredVisitors(),
+                summary.averagePerformanceScore(),
+                summary.medianPerformanceScore(),
+                summary.highTierSessions(),
+                summary.mediumTierSessions(),
+                summary.lowTierSessions(),
+                summary.averageCpuCores(),
+                summary.averageDeviceMemoryGb(),
+                summary.p75PageLoadMs(),
+                summary.p75DomInteractiveMs(),
+                summary.p75TtfbMs(),
+                summary.averageFrameRateFps(),
+                List.copyOf(groupedBuckets.getOrDefault("tier", List.of())),
+                List.copyOf(groupedBuckets.getOrDefault("cpu", List.of())),
+                List.copyOf(groupedBuckets.getOrDefault("memory", List.of())),
+                List.copyOf(groupedBuckets.getOrDefault("network", List.of())),
+                List.copyOf(groupedBuckets.getOrDefault("load_time", List.of())),
+                List.copyOf(groupedBuckets.getOrDefault("fps", List.of())),
+                List.copyOf(visitors));
     }
 
     /** Counts session starts by weekday and wall-clock hour in the site's configured timezone. */
@@ -1187,7 +1363,11 @@ public class SegmentedAnalyticsQueryService {
                 + "s.initial_utm_medium,s.initial_utm_campaign,s.initial_utm_term,s.initial_utm_content,s.browser,s.browser_version,s.operating_system,"
                 + "s.operating_system_version,s.device_type,s.language,s.screen_width,s.screen_height,"
                 + "s.viewport_width,s.viewport_height,s.pixel_ratio,s.country_code,s.continent_code,s.region_code,"
-                + "s.region_name,s.city,s.geo_timezone,s.user_id_hash,s.identity_key from analytics_session s "
+                + "s.region_name,s.city,s.geo_timezone,s.user_id_hash,s.identity_key,"
+                + "s.hardware_concurrency,s.device_memory_gb,s.connection_type,s.connection_downlink_mbps,"
+                + "s.connection_rtt_ms,s.save_data,s.ttfb_ms,s.dom_interactive_ms,s.page_load_ms,"
+                + "s.js_heap_used_mb,s.js_heap_limit_mb,s.frame_rate_fps,s.performance_score,s.performance_tier "
+                + "from analytics_session s "
                 + "join analytics_visitor v on v.id=s.visitor_id and v.site_id=s.site_id "
                 + "where s.site_id=? and (s.started_at at time zone ?)::date between ? and ? and ("
                 + context.filter().expression() + "))";
@@ -1373,6 +1553,75 @@ public class SegmentedAnalyticsQueryService {
             return new String(Base64.getUrlDecoder().decode(value), java.nio.charset.StandardCharsets.UTF_8);
         }
     }
+
+    @RegisterForReflection
+    public record DevicePerformanceBucket(String label, long sessions, long visitors, Double averageScore) {}
+
+    @RegisterForReflection
+    public record VisitorDevicePerformance(
+            String visitorId,
+            String ipAddress,
+            Instant lastSeenAt,
+            long sessions,
+            String browser,
+            String operatingSystem,
+            String deviceType,
+            Integer performanceScore,
+            String performanceTier,
+            Integer hardwareConcurrency,
+            Double deviceMemoryGb,
+            String connectionType,
+            Double connectionDownlinkMbps,
+            Integer connectionRttMs,
+            Boolean saveData,
+            Integer ttfbMs,
+            Integer domInteractiveMs,
+            Integer pageLoadMs,
+            Double jsHeapUsedMb,
+            Double jsHeapLimitMb,
+            Integer frameRateFps) {}
+
+    @RegisterForReflection
+    public record DevicePerformanceReport(
+            long totalSessions,
+            long measuredSessions,
+            long totalVisitors,
+            long measuredVisitors,
+            Double averagePerformanceScore,
+            Double medianPerformanceScore,
+            long highTierSessions,
+            long mediumTierSessions,
+            long lowTierSessions,
+            Double averageCpuCores,
+            Double averageDeviceMemoryGb,
+            Double p75PageLoadMs,
+            Double p75DomInteractiveMs,
+            Double p75TtfbMs,
+            Double averageFrameRateFps,
+            List<DevicePerformanceBucket> tierBreakdown,
+            List<DevicePerformanceBucket> cpuBreakdown,
+            List<DevicePerformanceBucket> memoryBreakdown,
+            List<DevicePerformanceBucket> networkBreakdown,
+            List<DevicePerformanceBucket> loadTimeBreakdown,
+            List<DevicePerformanceBucket> fpsBreakdown,
+            List<VisitorDevicePerformance> visitors) {}
+
+    private record DevicePerformanceSummary(
+            long totalSessions,
+            long measuredSessions,
+            long totalVisitors,
+            long measuredVisitors,
+            Double averagePerformanceScore,
+            Double medianPerformanceScore,
+            long highTierSessions,
+            long mediumTierSessions,
+            long lowTierSessions,
+            Double averageCpuCores,
+            Double averageDeviceMemoryGb,
+            Double p75PageLoadMs,
+            Double p75DomInteractiveMs,
+            Double p75TtfbMs,
+            Double averageFrameRateFps) {}
 
     private interface Row<T> {
         T map(ResultSet row) throws SQLException;

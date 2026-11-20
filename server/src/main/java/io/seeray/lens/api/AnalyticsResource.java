@@ -379,6 +379,17 @@ public class AnalyticsResource {
     }
 
     @GET
+    @Path("/device-performance")
+    public SegmentedAnalyticsQueryService.DevicePerformanceReport devicePerformance(
+            @PathParam("siteId") UUID site,
+            @QueryParam("from") String from,
+            @QueryParam("to") String to,
+            @QueryParam("segmentId") UUID segmentId,
+            @DefaultValue("100") @QueryParam("limit") int limit) {
+        return segmented.devicePerformance(site, analytics.range(site, from, to), segmentId, limit);
+    }
+
+    @GET
     @Path("/visit-time")
     public List<SegmentedAnalyticsQueryService.VisitTimeCell> visitTime(
             @PathParam("siteId") UUID site,

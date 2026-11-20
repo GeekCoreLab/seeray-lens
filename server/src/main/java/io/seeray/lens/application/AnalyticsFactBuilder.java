@@ -175,13 +175,14 @@ public class AnalyticsFactBuilder {
             throws SQLException {
         Set<UUID> visitorsWithInsertedSessions = new HashSet<>();
         try (PreparedStatement p = c.prepareStatement(
-                "insert into analytics_session(id,site_id,visitor_id,client_session_id,started_at,last_activity_at,ended_at,entry_page,exit_page,page_view_count,event_count,duration_ms,is_bounce,visitor_type,initial_referrer_host,initial_page_host,initial_utm_source,initial_utm_medium,initial_utm_campaign,browser,browser_version,operating_system,operating_system_version,device_type,language,screen_width,screen_height,viewport_width,viewport_height,pixel_ratio,entry_page_title,exit_page_title,country_code,continent_code,region_code,region_name,city,geo_timezone,initial_utm_term,initial_utm_content,user_id_hash,user_id_conflict,identity_key,ad_click_platform,ad_click_id_hash,client_ip) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::inet)")) {
+                "insert into analytics_session(id,site_id,visitor_id,client_session_id,started_at,last_activity_at,ended_at,entry_page,exit_page,page_view_count,event_count,duration_ms,is_bounce,visitor_type,initial_referrer_host,initial_page_host,initial_utm_source,initial_utm_medium,initial_utm_campaign,browser,browser_version,operating_system,operating_system_version,device_type,language,screen_width,screen_height,viewport_width,viewport_height,pixel_ratio,entry_page_title,exit_page_title,country_code,continent_code,region_code,region_name,city,geo_timezone,initial_utm_term,initial_utm_content,user_id_hash,user_id_conflict,identity_key,ad_click_platform,ad_click_id_hash,client_ip,hardware_concurrency,device_memory_gb,connection_type,connection_downlink_mbps,connection_rtt_ms,save_data,ttfb_ms,dom_interactive_ms,page_load_ms,js_heap_used_mb,js_heap_limit_mb,frame_rate_fps,performance_score,performance_tier) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::inet,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
             for (VisitorAcc v : values)
                 for (SessionAcc s : v.sessions) {
                     if (!s.startedAt.isBefore(to) || s.lastActivity.isBefore(from)) continue;
                     UUID visitorId = ids.get(v.clientId);
                     s.newVisitor = !visitorsWithInsertedSessions.contains(visitorId)
                             && !hasEarlierSession(c, site, visitorId, s.startedAt);
+                    DevicePerformanceScorer.Rating rating = s.performanceRating();
                     p.setObject(1, s.id = UuidV7.next());
                     p.setObject(2, site);
                     p.setObject(3, visitorId);
@@ -228,6 +229,21 @@ public class AnalyticsFactBuilder {
                     p.setString(44, s.adClickPlatform);
                     p.setString(45, s.adClickIdHash);
                     p.setString(46, s.clientIp);
+                    p.setObject(47, s.hardwareConcurrency);
+                    p.setObject(48, s.deviceMemoryGb);
+                    p.setString(49, s.connectionType);
+                    p.setObject(50, s.connectionDownlinkMbps);
+                    p.setObject(51, s.connectionRttMs);
+                    if (s.saveData == null) p.setNull(52, Types.BOOLEAN);
+                    else p.setBoolean(52, s.saveData);
+                    p.setObject(53, s.ttfbMs);
+                    p.setObject(54, s.domInteractiveMs);
+                    p.setObject(55, s.pageLoadMs);
+                    p.setObject(56, s.jsHeapUsedMb);
+                    p.setObject(57, s.jsHeapLimitMb);
+                    p.setObject(58, s.frameRateFps);
+                    p.setObject(59, rating.score());
+                    p.setString(60, rating.tier());
                     p.addBatch();
                     visitorsWithInsertedSessions.add(visitorId);
                 }
@@ -404,6 +420,10 @@ public class AnalyticsFactBuilder {
         String countryCode, continentCode, regionCode, region, city, geoTimezone;
         Integer screenWidth, screenHeight, viewportWidth, viewportHeight;
         Double pixelRatio;
+        Integer hardwareConcurrency, connectionRttMs, ttfbMs, domInteractiveMs, pageLoadMs, frameRateFps;
+        Double deviceMemoryGb, connectionDownlinkMbps, jsHeapUsedMb, jsHeapLimitMb;
+        String connectionType;
+        Boolean saveData;
         UUID id;
         Instant startedAt, lastActivity;
         int pageViews, events;
@@ -433,6 +453,7 @@ public class AnalyticsFactBuilder {
             } catch (Exception ignored) {
                 data = m.createObjectNode();
             }
+            captureDevicePerformance(data.path("context"));
             if ("page_view".equals(e.type)) {
                 if (pageViews == 0) {
                     captureTechnology(data.path("context"));
@@ -479,6 +500,38 @@ public class AnalyticsFactBuilder {
             JsonNode ratio = context.path("pixelRatio");
             if (ratio.isNumber() && ratio.doubleValue() >= 0.25 && ratio.doubleValue() <= 8.0)
                 pixelRatio = ratio.doubleValue();
+        }
+
+        private void captureDevicePerformance(JsonNode context) {
+            DevicePerformanceScorer.Metrics metrics = DevicePerformanceScorer.fromContext(context);
+            if (hardwareConcurrency == null) hardwareConcurrency = metrics.hardwareConcurrency();
+            if (deviceMemoryGb == null) deviceMemoryGb = metrics.deviceMemoryGb();
+            if (connectionType == null) connectionType = metrics.connectionType();
+            if (connectionDownlinkMbps == null) connectionDownlinkMbps = metrics.connectionDownlinkMbps();
+            if (connectionRttMs == null) connectionRttMs = metrics.connectionRttMs();
+            if (saveData == null) saveData = metrics.saveData();
+            if (ttfbMs == null) ttfbMs = metrics.ttfbMs();
+            if (domInteractiveMs == null) domInteractiveMs = metrics.domInteractiveMs();
+            if (pageLoadMs == null) pageLoadMs = metrics.pageLoadMs();
+            if (jsHeapUsedMb == null) jsHeapUsedMb = metrics.jsHeapUsedMb();
+            if (jsHeapLimitMb == null) jsHeapLimitMb = metrics.jsHeapLimitMb();
+            if (frameRateFps == null) frameRateFps = metrics.frameRateFps();
+        }
+
+        private DevicePerformanceScorer.Rating performanceRating() {
+            return DevicePerformanceScorer.evaluate(new DevicePerformanceScorer.Metrics(
+                    hardwareConcurrency,
+                    deviceMemoryGb,
+                    connectionType,
+                    connectionDownlinkMbps,
+                    connectionRttMs,
+                    saveData,
+                    ttfbMs,
+                    domInteractiveMs,
+                    pageLoadMs,
+                    jsHeapUsedMb,
+                    jsHeapLimitMb,
+                    frameRateFps));
         }
 
         private void captureLocation(JsonNode context) {

@@ -9,6 +9,7 @@ import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
 import '../application/visitor_profile_controller.dart';
+import 'device_performance_badge.dart';
 import 'merged_timeline_action.dart';
 import 'timeline_date_formatter.dart';
 import 'visitor_timezone_utils.dart';
@@ -261,6 +262,27 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
     final bounceRate = profile.rangeSessions == 0
         ? 0.0
         : profile.rangeBouncedSessions / profile.rangeSessions * 100;
+    final latestPerformance = profile.sessions
+        .where(
+          (session) =>
+              session.performanceScore != null ||
+              session.hardwareConcurrency != null ||
+              session.deviceMemoryGb != null ||
+              session.connectionType != null ||
+              session.pageLoadMs != null ||
+              session.frameRateFps != null,
+        )
+        .firstOrNull;
+    final latestPerformanceSummary = latestPerformance == null
+        ? null
+        : formatPerformanceSummaryLine(
+            context,
+            hardwareConcurrency: latestPerformance.hardwareConcurrency,
+            deviceMemoryGb: latestPerformance.deviceMemoryGb,
+            connectionType: latestPerformance.connectionType,
+            pageLoadMs: latestPerformance.pageLoadMs,
+            frameRateFps: latestPerformance.frameRateFps,
+          );
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -414,6 +436,18 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
               label: context.tr('Average visit duration', '平均访问时长'),
               value: _duration(profile.averageSessionDurationMs),
             ),
+            if (latestPerformance != null)
+              _MetricCard(
+                icon: Icons.speed_outlined,
+                label: context.tr('Device performance', '设备性能'),
+                value: latestPerformance.performanceScore == null
+                    ? devicePerformanceTierLabel(
+                        context,
+                        latestPerformance.performanceTier,
+                      )
+                    : '${devicePerformanceTierLabel(context, latestPerformance.performanceTier)} · ${latestPerformance.performanceScore}',
+                detail: latestPerformanceSummary,
+              ),
           ],
         ),
         const SizedBox(height: 18),
@@ -586,6 +620,21 @@ class _VisitCard extends StatelessWidget {
       visit.campaignMedium,
       visit.campaignName,
     ].whereType<String>().where((value) => value.isNotEmpty).join(' / ');
+    final perfChips = formatDeviceHardwareChips(
+      context,
+      hardwareConcurrency: visit.hardwareConcurrency,
+      deviceMemoryGb: visit.deviceMemoryGb,
+      connectionType: visit.connectionType,
+      connectionDownlinkMbps: visit.connectionDownlinkMbps,
+      connectionRttMs: visit.connectionRttMs,
+      saveData: visit.saveData,
+      ttfbMs: visit.ttfbMs,
+      domInteractiveMs: visit.domInteractiveMs,
+      pageLoadMs: visit.pageLoadMs,
+      jsHeapUsedMb: visit.jsHeapUsedMb,
+      jsHeapLimitMb: visit.jsHeapLimitMb,
+      frameRateFps: visit.frameRateFps,
+    );
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
@@ -694,6 +743,18 @@ class _VisitCard extends StatelessWidget {
                   time: visit.startedAt,
                   countryCode: visit.countryCode,
                 ),
+                if (visit.performanceScore != null ||
+                    visit.performanceTier != null)
+                  DevicePerformanceTierBadge(
+                    tier: visit.performanceTier,
+                    score: visit.performanceScore,
+                    compact: true,
+                  ),
+                for (final chip in perfChips)
+                  _InfoChip(
+                    text: chip.label,
+                    leading: Icon(chip.icon, size: 17),
+                  ),
               ],
             ),
           ],

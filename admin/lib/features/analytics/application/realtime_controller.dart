@@ -51,6 +51,13 @@ class AnalyticsLiveVisitor {
     required this.ipAddress,
     required this.tlsFingerprintGroup,
     required this.browserFingerprintGroup,
+    this.performanceScore,
+    this.performanceTier,
+    this.hardwareConcurrency,
+    this.deviceMemoryGb,
+    this.connectionType,
+    this.pageLoadMs,
+    this.frameRateFps,
   });
 
   final String visitorId;
@@ -76,6 +83,13 @@ class AnalyticsLiveVisitor {
   final String? ipAddress;
   final String? tlsFingerprintGroup;
   final String? browserFingerprintGroup;
+  final int? performanceScore;
+  final String? performanceTier;
+  final int? hardwareConcurrency;
+  final double? deviceMemoryGb;
+  final String? connectionType;
+  final int? pageLoadMs;
+  final int? frameRateFps;
 
   factory AnalyticsLiveVisitor.fromJson(Map<String, dynamic> json) =>
       AnalyticsLiveVisitor(
@@ -103,6 +117,13 @@ class AnalyticsLiveVisitor {
         ipAddress: json['ipAddress'] as String?,
         tlsFingerprintGroup: json['tlsFingerprintGroup'] as String?,
         browserFingerprintGroup: json['browserFingerprintGroup'] as String?,
+        performanceScore: (json['performanceScore'] as num?)?.toInt(),
+        performanceTier: json['performanceTier'] as String?,
+        hardwareConcurrency: (json['hardwareConcurrency'] as num?)?.toInt(),
+        deviceMemoryGb: (json['deviceMemoryGb'] as num?)?.toDouble(),
+        connectionType: json['connectionType'] as String?,
+        pageLoadMs: (json['pageLoadMs'] as num?)?.toInt(),
+        frameRateFps: (json['frameRateFps'] as num?)?.toInt(),
         actions: (json['actions'] as List? ?? const [])
             .whereType<Map>()
             .map(

@@ -35,11 +35,36 @@ void main() {
     expect(find.textContaining('page_view ·'), findsOneWidget);
     expect(find.textContaining('Entry: /pricing'), findsOneWidget);
   });
+
+  testWidgets('renders live visitor device performance metrics when expanded', (
+    tester,
+  ) async {
+    final api = _LiveApi(includePerformance: true);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [apiProvider.overrideWithValue(api)],
+        child: const MaterialApp(
+          home: RealtimePage(siteId: 'site-1', embedded: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ExpansionTile).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('High · 90'), findsOneWidget);
+    expect(find.text('8 cores'), findsOneWidget);
+    expect(find.text('8 GB RAM'), findsOneWidget);
+    expect(find.text('60 FPS'), findsOneWidget);
+  });
 }
 
 class _LiveApi extends SeeRayApi {
-  _LiveApi() : super(baseUrl: 'https://lens.example.test');
+  _LiveApi({this.includePerformance = false})
+    : super(baseUrl: 'https://lens.example.test');
 
+  final bool includePerformance;
   String? lastPath;
 
   @override
@@ -72,6 +97,15 @@ class _LiveApi extends SeeRayApi {
       'language': 'en-US',
       'durationMs': 1800,
       'uniqueIdentity': true,
+      if (includePerformance) ...{
+        'performanceScore': 90,
+        'performanceTier': 'high',
+        'hardwareConcurrency': 8,
+        'deviceMemoryGb': 8.0,
+        'connectionType': '4g',
+        'pageLoadMs': 1100,
+        'frameRateFps': 60,
+      },
       'actions': [
         {
           'at': now,
