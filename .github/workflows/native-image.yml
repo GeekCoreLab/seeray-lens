@@ -34,6 +34,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install esbuild for static asset minification
+        run: npm install -g esbuild
+
       - name: Build Quarkus native executable
         run: >-
           ./gradlew :server:quarkusBuild

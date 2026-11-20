@@ -57,6 +57,30 @@ tasks.named('check') {
     dependsOn 'spotlessCheck'
 }
 
+tasks.named('processResources') {
+    def repoRoot = rootProject.projectDir
+    def minifyScript = rootProject.file('scripts/minify-assets.mjs')
+    def resourcesOutDir = layout.buildDirectory.dir('resources/main/META-INF/resources')
+    inputs.file(minifyScript)
+    doLast {
+        def outDir = resourcesOutDir.get().asFile
+        def pb = new ProcessBuilder(
+                'sh',
+                '-c',
+                'if command -v node >/dev/null; then node "$1" "$2"; else echo "[minify-assets] node not found, skipping minification"; fi',
+                'sh',
+                minifyScript.absolutePath,
+                outDir.absolutePath
+        )
+        pb.directory(repoRoot)
+        pb.inheritIO()
+        def exitCode = pb.start().waitFor()
+        if (exitCode != 0) {
+            throw new GradleException("Asset minification failed with exit code ${exitCode}")
+        }
+    }
+}
+
 // Keep Quarkus dev mode rooted at the repository so the IDE and Gradle task
 // both load the ignored root .env file.
 tasks.named('quarkusDev') {
