@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_range.dart';
@@ -172,6 +173,7 @@ class _CrashReport extends StatelessWidget {
                       : SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: DataTable(
+                            dataRowMaxHeight: 68,
                             columns: [
                               DataColumn(
                                 label: Text(context.tr('Error', '错误')),
@@ -205,29 +207,61 @@ class _CrashReport extends StatelessWidget {
                                       DataCell(
                                         SizedBox(
                                           width: 300,
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                          child: Row(
                                             children: [
-                                              Text(
-                                                issue.errorName,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
+                                              Expanded(
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      issue.errorName,
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      issue.message,
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              Text(
-                                                issue.message,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
+                                              CopyIconButton(
+                                                text:
+                                                    '${issue.errorName}: ${issue.message}',
+                                                tooltipEn: 'Copy error',
+                                                tooltipZh: '复制错误信息',
+                                                copiedEn: 'Error copied',
+                                                copiedZh: '错误信息已复制',
+                                                iconSize: 14,
                                               ),
                                             ],
                                           ),
                                         ),
                                       ),
                                       DataCell(
-                                        Text(_source(issue), maxLines: 2),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                _source(issue),
+                                                maxLines: 2,
+                                              ),
+                                            ),
+                                            if (issue.sourcePath.isNotEmpty)
+                                              UrlActionButtons(
+                                                rawUrl: issue.sourcePath,
+                                                iconSize: 14,
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                       DataCell(Text('${issue.occurrences}')),
                                       DataCell(Text('${issue.affectedPages}')),
@@ -280,7 +314,21 @@ class _CrashCard extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       isThreeLine: true,
-      trailing: Text('${issue.occurrences}×'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CopyIconButton(
+            text: '${issue.errorName}: ${issue.message}\n${_source(issue)}',
+            tooltipEn: 'Copy error details',
+            tooltipZh: '复制错误详情',
+            copiedEn: 'Error copied',
+            copiedZh: '错误信息已复制',
+            iconSize: 15,
+          ),
+          const SizedBox(width: 4),
+          Text('${issue.occurrences}×'),
+        ],
+      ),
     ),
   );
 }

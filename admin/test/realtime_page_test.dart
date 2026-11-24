@@ -31,6 +31,8 @@ void main() {
     );
     expect(find.textContaining('12345678'), findsNothing);
     expect(find.text('Pricing overview'), findsNWidgets(2));
+    expect(find.byTooltip('Copy IP'), findsNWidgets(2));
+    expect(find.byTooltip('Copy URL'), findsNWidgets(2));
 
     await tester.tap(find.byType(ExpansionTile).first);
     await tester.pumpAndSettle();
@@ -38,6 +40,10 @@ void main() {
     expect(find.text('Recent activity'), findsOneWidget);
     expect(find.textContaining('page_view ·'), findsOneWidget);
     expect(find.textContaining('Entry: /pricing'), findsOneWidget);
+    expect(find.byTooltip('Copy IP address'), findsOneWidget);
+    expect(find.byTooltip('Copy location'), findsOneWidget);
+    expect(find.byTooltip('Copy URL'), findsWidgets);
+    expect(find.byTooltip('Open URL'), findsWidgets);
   });
 
   testWidgets('renders live visitor device performance metrics when expanded', (

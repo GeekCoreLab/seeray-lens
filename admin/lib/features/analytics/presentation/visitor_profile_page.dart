@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_range.dart';
@@ -346,11 +347,19 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
                                 ).colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(width: 4),
-                              Expanded(
+                              Flexible(
                                 child: Text(
                                   latestLocation,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
+                              ),
+                              CopyIconButton(
+                                text: latestLocation,
+                                tooltipEn: 'Copy location',
+                                tooltipZh: '复制地理位置',
+                                copiedEn: 'Location copied',
+                                copiedZh: '地理位置已复制',
+                                iconSize: 14,
                               ),
                             ],
                           ),
@@ -500,7 +509,8 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
             ),
           )
         else ...[
-          for (final visit in _sessions) _VisitCard(visit: visit),
+          for (final visit in _sessions)
+            _VisitCard(siteId: siteId, visit: visit),
         ],
         if (_nextSessionsCursor != null || _sessionsError != null)
           _HistoryPageButton(
@@ -534,7 +544,7 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
                           '${action.eventType}|${action.path ?? ''}|${action.title ?? ''}|${action.sessionId}',
                       timeOf: (action) => action.at,
                     ))
-                  _MergedActionTile(merged: merged),
+                  _MergedActionTile(siteId: siteId, merged: merged),
               ],
             ),
           ),
@@ -637,8 +647,9 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _VisitCard extends StatelessWidget {
-  const _VisitCard({required this.visit});
+  const _VisitCard({required this.siteId, required this.visit});
 
+  final String siteId;
   final AnalyticsVisitorProfileSession visit;
 
   @override
@@ -690,10 +701,22 @@ class _VisitCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    _page(visit.entryPage),
-                    style: Theme.of(context).textTheme.titleSmall,
-                    overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _page(visit.entryPage),
+                          style: Theme.of(context).textTheme.titleSmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (visit.entryPage != null &&
+                          visit.entryPage!.isNotEmpty)
+                        UrlActionButtons(
+                          rawUrl: visit.entryPage!,
+                          siteId: siteId,
+                        ),
+                    ],
                   ),
                 ),
                 Text(
@@ -704,11 +727,25 @@ class _VisitCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(left: 44, top: 3),
-              child: Text(
-                '${context.tr('Exit', '退出')}: ${_page(visit.exitPage)} · ${visit.pageViews} ${context.tr('pages', '页')} · ${visit.events} ${context.tr('events', '事件')} · ${_duration(visit.durationMs)}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '${context.tr('Exit', '退出')}: ${_page(visit.exitPage)} · ${visit.pageViews} ${context.tr('pages', '页')} · ${visit.events} ${context.tr('events', '事件')} · ${_duration(visit.durationMs)}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  if (visit.exitPage != null &&
+                      visit.exitPage!.isNotEmpty &&
+                      visit.exitPage != visit.entryPage)
+                    UrlActionButtons(
+                      rawUrl: visit.exitPage!,
+                      siteId: siteId,
+                      iconSize: 14,
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 10),
@@ -750,27 +787,77 @@ class _VisitCard extends StatelessWidget {
                   ),
                 if (visit.language != null) _InfoChip(text: visit.language!),
                 if (visit.ipAddress != null)
-                  _InfoChip(
-                    text: '${context.tr('IP', 'IP')}: ${visit.ipAddress}',
-                    leading: const Icon(Icons.lan_outlined, size: 17),
-                  ),
+                  CopyableIpChip(ipAddress: visit.ipAddress!),
                 if (location.isNotEmpty)
-                  _InfoChip(
-                    text: location,
-                    leading: CountryFlag(
+                  ActionChip(
+                    avatar: CountryFlag(
                       countryCode: visit.countryCode,
                       size: 17,
                     ),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.copy_outlined, size: 13),
+                      ],
+                    ),
+                    tooltip: context.tr('Copy location', '复制地理位置'),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    onPressed: () => copyDataText(
+                      context,
+                      location,
+                      englishMessage: 'Location copied',
+                      chineseMessage: '地理位置已复制',
+                    ),
                   ),
-                if (visit.referrerHost?.isNotEmpty == true)
-                  _InfoChip(
-                    text:
-                        '${context.tr('Referrer', '来源')}: ${visit.referrerHost}',
-                    leading: ReferrerFavicon(
+                if (visit.referrerHost?.isNotEmpty == true) ...[
+                  ActionChip(
+                    avatar: ReferrerFavicon(
                       host: visit.referrerHost!,
                       size: 17,
                     ),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${context.tr('Referrer', '来源')}: ${visit.referrerHost}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.open_in_new, size: 13),
+                      ],
+                    ),
+                    tooltip: context.tr(
+                      'Open referrer website',
+                      '打开来源网站',
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      final uri = resolveNavigableUrl(visit.referrerHost);
+                      if (uri != null) {
+                        openNavigableUrl(context, uri);
+                      } else {
+                        copyDataText(context, visit.referrerHost!);
+                      }
+                    },
                   ),
+                  CopyIconButton(
+                    text: visit.referrerHost!,
+                    tooltipEn: 'Copy referrer',
+                    tooltipZh: '复制来源域名',
+                    copiedEn: 'Referrer copied',
+                    copiedZh: '来源域名已复制',
+                    iconSize: 14,
+                  ),
+                ],
                 if (campaign.isNotEmpty)
                   _InfoChip(text: '${context.tr('Campaign', '活动')}: $campaign'),
                 VisitorTimezoneBadge(
@@ -799,8 +886,9 @@ class _VisitCard extends StatelessWidget {
 }
 
 class _MergedActionTile extends StatelessWidget {
-  const _MergedActionTile({required this.merged});
+  const _MergedActionTile({required this.siteId, required this.merged});
 
+  final String siteId;
   final MergedTimelineAction<AnalyticsVisitorProfileAction> merged;
 
   @override
@@ -832,12 +920,20 @@ class _MergedActionTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: Text(
-        merged.count > 1 &&
-                (merged.firstAt.minute != merged.lastAt.minute ||
-                    merged.firstAt.hour != merged.lastAt.hour)
-            ? '${_time(merged.firstAt)}–${_time(merged.lastAt)}'
-            : _time(action.at),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (action.path != null && action.path!.isNotEmpty)
+            UrlActionButtons(rawUrl: action.path!, siteId: siteId),
+          const SizedBox(width: 4),
+          Text(
+            merged.count > 1 &&
+                    (merged.firstAt.minute != merged.lastAt.minute ||
+                        merged.firstAt.hour != merged.lastAt.hour)
+                ? '${_time(merged.firstAt)}–${_time(merged.lastAt)}'
+                : _time(action.at),
+          ),
+        ],
       ),
     );
   }

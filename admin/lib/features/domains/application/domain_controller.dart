@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/presentation/data_actions.dart';
 import '../../auth/application/auth_controller.dart';
 
 class AllowedDomain {
@@ -44,9 +45,13 @@ class DomainsController extends AsyncNotifier<List<AllowedDomain>> {
                 .read(apiProvider)
                 .request('GET', '/api/v1/sites/$siteId/domains')
             as List;
-    return data
+    final items = data
         .map((item) => AllowedDomain.fromJson(item as Map<String, dynamic>))
         .toList(growable: false);
+    ref
+        .read(sitePrimaryHostCacheProvider.notifier)
+        .setHost(siteId, resolvePrimaryHostFromDomains(items));
+    return items;
   }
 
   Future<void> create(String host, bool allowSubdomains, bool enabled) async {
@@ -62,7 +67,11 @@ class DomainsController extends AsyncNotifier<List<AllowedDomain>> {
           },
         );
     final domain = AllowedDomain.fromJson(data as Map<String, dynamic>);
-    state = AsyncData([...(state.value ?? const <AllowedDomain>[]), domain]);
+    final next = [...(state.value ?? const <AllowedDomain>[]), domain];
+    ref
+        .read(sitePrimaryHostCacheProvider.notifier)
+        .setHost(siteId, resolvePrimaryHostFromDomains(next));
+    state = AsyncData(next);
   }
 
   Future<void> updateDomain(
@@ -78,20 +87,26 @@ class DomainsController extends AsyncNotifier<List<AllowedDomain>> {
           body: {'allowSubdomains': allowSubdomains, 'enabled': enabled},
         );
     final updated = AllowedDomain.fromJson(data as Map<String, dynamic>);
-    state = AsyncData([
+    final next = [
       for (final item in state.value ?? const <AllowedDomain>[])
         if (item.id == domain.id) updated else item,
-    ]);
+    ];
+    ref
+        .read(sitePrimaryHostCacheProvider.notifier)
+        .setHost(siteId, resolvePrimaryHostFromDomains(next));
+    state = AsyncData(next);
   }
 
   Future<void> deleteDomain(String domainId) async {
     await ref
         .read(apiProvider)
         .request('DELETE', '/api/v1/sites/$siteId/domains/$domainId');
-    state = AsyncData(
-      (state.value ?? const <AllowedDomain>[])
-          .where((item) => item.id != domainId)
-          .toList(),
-    );
+    final next = (state.value ?? const <AllowedDomain>[])
+        .where((item) => item.id != domainId)
+        .toList();
+    ref
+        .read(sitePrimaryHostCacheProvider.notifier)
+        .setHost(siteId, resolvePrimaryHostFromDomains(next));
+    state = AsyncData(next);
   }
 }

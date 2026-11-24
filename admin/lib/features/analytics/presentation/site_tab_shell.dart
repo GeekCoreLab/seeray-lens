@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
+import '../../domains/application/domain_controller.dart';
 import '../application/analytics_attribution.dart';
 import '../application/analytics_controller.dart';
 import '../application/analytics_annotations.dart';
@@ -28,6 +29,7 @@ class SiteTabShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final path = state.uri.path;
     final siteId = state.pathParameters['siteId']!;
+    ref.watch(domainsProvider(siteId));
     final selected = path.endsWith('/dashboard')
         ? SiteTopTab.dashboard
         : path.endsWith('/annotations')

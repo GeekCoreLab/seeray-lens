@@ -66,6 +66,7 @@ void main() {
 
     expect(find.text('203.0.113.10'), findsOneWidget);
     expect(find.text('203.0.113.20'), findsOneWidget);
+    expect(find.byTooltip('Copy IP address'), findsNWidgets(2));
     expect(
       find.text('San Francisco · California · United States'),
       findsOneWidget,

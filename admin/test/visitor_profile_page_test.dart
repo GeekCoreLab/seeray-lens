@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -68,11 +69,32 @@ void main() {
     await tester.enterText(find.byType(TextField), '203.0.113.45');
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, '203.0.113.45'), findsOneWidget);
+    expect(find.byTooltip('Copy IP address'), findsOneWidget);
+
+    String? copiedText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copiedText =
+                (call.arguments as Map<Object?, Object?>)['text'] as String?;
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await tester.tap(find.byTooltip('Copy IP address'));
+    await tester.pump();
+    expect(copiedText, '203.0.113.45');
+
     await tester.tap(find.widgetWithText(ListTile, '203.0.113.45'));
     await tester.pumpAndSettle();
 
     expect(find.text('Visitor profile'), findsOneWidget);
     expect(find.text('203.0.113.45'), findsOneWidget);
+    expect(find.byTooltip('Copy URL'), findsWidgets);
+    expect(find.byTooltip('Open URL'), findsWidgets);
     expect(
       find.text('San Francisco · California · United States'),
       findsNWidgets(2),

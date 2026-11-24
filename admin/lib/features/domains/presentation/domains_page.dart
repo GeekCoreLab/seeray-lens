@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/i18n/app_i18n.dart';
 import '../../../shared/presentation/app_back_button.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../application/domain_controller.dart';
 
@@ -73,12 +74,18 @@ class DomainsPage extends ConsumerWidget {
                                   enabled: enabled,
                                 ),
                           ),
-                          trailing: IconButton(
-                            tooltip: context.tr('Delete domain', '删除域名'),
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => ref
-                                .read(domainsProvider(siteId).notifier)
-                                .deleteDomain(domain.id),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              UrlActionButtons(rawUrl: domain.host),
+                              IconButton(
+                                tooltip: context.tr('Delete domain', '删除域名'),
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => ref
+                                    .read(domainsProvider(siteId).notifier)
+                                    .deleteDomain(domain.id),
+                              ),
+                            ],
                           ),
                           onTap: () => _edit(context, ref, domain),
                         ),

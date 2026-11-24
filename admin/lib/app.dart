@@ -63,7 +63,10 @@ class SeeRayLensAdminApp extends ConsumerStatefulWidget {
 
   static final GoRouter _router = GoRouter(
     routes: <RouteBase>[
-      GoRoute(path: '/', builder: (context, state) => const LandingPage()),
+      ShellRoute(
+        builder: (context, state, child) => SelectionArea(child: child),
+        routes: <RouteBase>[
+          GoRoute(path: '/', builder: (context, state) => const LandingPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
         path: '/accept-invitation',
@@ -550,6 +553,8 @@ class SeeRayLensAdminApp extends ConsumerStatefulWidget {
         builder: (context, state) =>
             const _Authenticated(child: TokenSettingsPage()),
       ),
+        ],
+      ),
     ],
   );
 }
@@ -581,7 +586,10 @@ class _SeeRayLensAdminAppState extends ConsumerState<SeeRayLensAdminApp> {
 /*
   static final GoRouter _router = GoRouter(
     routes: <RouteBase>[
-      GoRoute(path: '/', builder: (context, state) => const LandingPage()),
+      ShellRoute(
+        builder: (context, state, child) => SelectionArea(child: child),
+        routes: <RouteBase>[
+          GoRoute(path: '/', builder: (context, state) => const LandingPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
         path: '/workspaces',

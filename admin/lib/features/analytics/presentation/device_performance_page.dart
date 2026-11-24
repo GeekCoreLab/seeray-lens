@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_controller.dart';
@@ -853,11 +854,27 @@ class _VisitorPerformanceCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          ipLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                ipLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                            if (visitor.ipAddress != null) ...[
+                              const SizedBox(width: 2),
+                              CopyIconButton(
+                                text: visitor.ipAddress!,
+                                tooltipEn: 'Copy IP address',
+                                tooltipZh: '复制 IP 地址',
+                                copiedEn: 'IP copied',
+                                copiedZh: '已复制 IP',
+                              ),
+                            ],
+                          ],
                         ),
                         Text(
                           '${visitor.sessions} ${context.tr('visits', '次访问')} · ${formatTimelineTime(context, visitor.lastSeenAt)}',

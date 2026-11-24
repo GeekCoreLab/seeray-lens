@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/realtime_controller.dart';
@@ -215,12 +216,14 @@ class _RealtimePageState extends ConsumerState<RealtimePage> {
             for (var index = 0; index < groups.length; index++)
               if (_aggregate && groups[index].length > 1)
                 _LiveVisitGroup(
+                  siteId: widget.siteId,
                   index: index + 1,
                   visitors: groups[index],
                   view: _associationView,
                 )
               else
                 _LiveVisitCard(
+                  siteId: widget.siteId,
                   visitor: groups[index].first,
                   view: _associationView,
                 ),
@@ -269,8 +272,13 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _LiveVisitCard extends StatelessWidget {
-  const _LiveVisitCard({required this.visitor, required this.view});
+  const _LiveVisitCard({
+    required this.siteId,
+    required this.visitor,
+    required this.view,
+  });
 
+  final String siteId;
   final AnalyticsLiveVisitor visitor;
   final VisitorAssociationView view;
 
@@ -309,15 +317,42 @@ class _LiveVisitCard extends StatelessWidget {
           backgroundColor: Color(0xffe8eff7),
           child: Icon(Icons.person_outline, color: Color(0xff315e87)),
         ),
-        title: Text(page, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          [
-            association,
-            if (location.isNotEmpty) location,
-            _relativeTime(context, visitor.lastActivityAt),
-          ].join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(page, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            if (visitor.currentPage != null && visitor.currentPage!.isNotEmpty)
+              UrlActionButtons(
+                rawUrl: visitor.currentPage!,
+                siteId: siteId,
+                iconSize: 15,
+              ),
+          ],
+        ),
+        subtitle: Row(
+          children: [
+            Flexible(
+              child: Text(
+                [
+                  association,
+                  if (location.isNotEmpty) location,
+                  _relativeTime(context, visitor.lastActivityAt),
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (visitor.ipAddress != null)
+              CopyIconButton(
+                text: visitor.ipAddress!,
+                tooltipEn: 'Copy IP',
+                tooltipZh: '复制 IP',
+                copiedEn: 'IP copied',
+                copiedZh: '已复制 IP',
+                iconSize: 14,
+              ),
+          ],
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -334,21 +369,32 @@ class _LiveVisitCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               if (visitor.ipAddress != null)
-                _InfoChip(
-                  icon: Icons.lan_outlined,
-                  text: '${context.tr('IP', 'IP')}: ${visitor.ipAddress}',
-                ),
+                CopyableIpChip(ipAddress: visitor.ipAddress!),
               if (location.isNotEmpty)
-                Chip(
+                ActionChip(
                   avatar: visitor.countryCode != null
                       ? CountryFlag(countryCode: visitor.countryCode, size: 16)
                       : const Icon(Icons.place_outlined, size: 16),
-                  label: Text(
-                    location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.copy_outlined, size: 13),
+                    ],
                   ),
+                  tooltip: context.tr('Copy location', '复制地理位置'),
                   visualDensity: VisualDensity.compact,
+                  onPressed: () => copyDataText(
+                    context,
+                    location,
+                    englishMessage: 'Location copied',
+                    chineseMessage: '地理位置已复制',
+                  ),
                 ),
               if (visitor.deviceType != null)
                 _InfoChip(
@@ -389,9 +435,21 @@ class _LiveVisitCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '${context.tr('Entry', '入口')}: ${visitor.entryPage ?? '—'}',
-                  overflow: TextOverflow.ellipsis,
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '${context.tr('Entry', '入口')}: ${visitor.entryPage ?? '—'}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (visitor.entryPage != null &&
+                        visitor.entryPage!.isNotEmpty)
+                      UrlActionButtons(
+                        rawUrl: visitor.entryPage!,
+                        siteId: siteId,
+                      ),
+                  ],
                 ),
               ),
               Text(_duration(context, visitor.durationMs)),
@@ -430,6 +488,13 @@ class _LiveVisitCard extends StatelessWidget {
                 '${merged.sample.eventType} · ${formatTimelineTime(context, merged.sample.at)}',
                 maxLines: 1,
               ),
+              trailing:
+                  merged.sample.path != null && merged.sample.path!.isNotEmpty
+                  ? UrlActionButtons(
+                      rawUrl: merged.sample.path!,
+                      siteId: siteId,
+                    )
+                  : null,
             ),
         ],
       ),
@@ -456,11 +521,13 @@ class _LiveVisitCard extends StatelessWidget {
 
 class _LiveVisitGroup extends StatelessWidget {
   const _LiveVisitGroup({
+    required this.siteId,
     required this.index,
     required this.visitors,
     required this.view,
   });
 
+  final String siteId;
   final int index;
   final List<AnalyticsLiveVisitor> visitors;
   final VisitorAssociationView view;
@@ -481,7 +548,7 @@ class _LiveVisitGroup extends StatelessWidget {
       childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       children: [
         for (final visitor in visitors)
-          _LiveVisitCard(visitor: visitor, view: view),
+          _LiveVisitCard(siteId: siteId, visitor: visitor, view: view),
       ],
     ),
   );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_range.dart';
@@ -220,9 +221,21 @@ class _MediaAnalyticsReport extends StatelessWidget {
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
-                                            Text(
-                                              row.pagePath,
-                                              overflow: TextOverflow.ellipsis,
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    row.pagePath,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                UrlActionButtons(
+                                                  rawUrl: row.pagePath,
+                                                  siteId: siteId,
+                                                  iconSize: 14,
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),

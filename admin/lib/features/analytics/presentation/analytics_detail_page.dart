@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/i18n/app_i18n.dart';
 import '../../../core/network/seeray_api.dart';
 import '../../../shared/presentation/app_back_button.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../../auth/application/auth_controller.dart';
@@ -122,6 +123,7 @@ class _BehaviourBody extends StatelessWidget {
                 : context.tr('Untitled page', '未命名页面'),
             item.path,
             item.pageViews,
+            url: item.path,
           ),
         )
         .toList(growable: false);
@@ -150,6 +152,7 @@ class _BehaviourBody extends StatelessWidget {
           metric: context.tr('Page views', '页面浏览'),
           empty: context.tr('No page views yet', '暂无页面浏览数据'),
           rows: pages,
+          siteId: siteId,
         ),
         const SizedBox(height: 16),
         _PageOverlayLauncher(siteId: siteId, pages: data.pages, query: query),
@@ -168,12 +171,14 @@ class _BehaviourBody extends StatelessWidget {
               metric: context.tr('Visits', '访问'),
               empty: context.tr('No entry-page data yet', '暂无入口页面数据'),
               rows: entryRows,
+              siteId: siteId,
             );
             final exitPanel = _BehaviourPanel(
               title: context.tr('Exit pages', '退出页面'),
               metric: context.tr('Visits', '访问'),
               empty: context.tr('No exit-page data yet', '暂无退出页面数据'),
               rows: exitRows,
+              siteId: siteId,
             );
             return wide
                 ? Row(
@@ -210,6 +215,7 @@ class _BehaviourBody extends StatelessWidget {
     item.title?.isNotEmpty == true ? item.title! : item.path,
     item.title?.isNotEmpty == true ? item.path : null,
     item.sessions,
+    url: item.path,
   );
 }
 
@@ -385,26 +391,44 @@ class _PageOverlayLauncherState extends ConsumerState<_PageOverlayLauncher> {
               const SizedBox(height: 12),
               SelectableText(launchUrl),
               const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: launchUrl));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          context.tr('Overlay link copied', '覆盖层链接已复制'),
-                        ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: launchUrl));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              context.tr('Overlay link copied', '覆盖层链接已复制'),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: Text(
+                      context.tr(
+                        'Copy link and open it in a tracked browser',
+                        '复制链接并在已安装 tracker 的浏览器中打开',
                       ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.copy),
-                label: Text(
-                  context.tr(
-                    'Copy link and open it in a tracked browser',
-                    '复制链接并在已安装 tracker 的浏览器中打开',
+                    ),
                   ),
-                ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final uri = resolveNavigableUrl(launchUrl);
+                      if (uri != null) {
+                        openNavigableUrl(context, uri);
+                      } else {
+                        copyDataText(context, launchUrl);
+                      }
+                    },
+                    icon: const Icon(Icons.open_in_new),
+                    label: Text(context.tr('Open link', '打开链接')),
+                  ),
+                ],
               ),
             ],
           ],
@@ -601,10 +625,22 @@ class _SiteSearchPanel extends StatelessWidget {
                                 constraints: const BoxConstraints(
                                   maxWidth: 240,
                                 ),
-                                child: Text(
-                                  term.keyword,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        term.keyword,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (term.keyword.isNotEmpty)
+                                      CopyIconButton(
+                                        text: term.keyword,
+                                        iconSize: 14,
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -791,7 +827,21 @@ class _ContentAnalyticsPanel extends StatelessWidget {
                         cells: [
                           DataCell(_BoundedReportText(entry.name)),
                           DataCell(Text(entry.piece ?? '—')),
-                          DataCell(_BoundedReportText(entry.target ?? '—')),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _BoundedReportText(entry.target ?? '—'),
+                                if (entry.target != null &&
+                                    entry.target!.trim().isNotEmpty)
+                                  UrlActionButtons(
+                                    rawUrl: entry.target!,
+                                    siteId: siteId,
+                                    iconSize: 14,
+                                  ),
+                              ],
+                            ),
+                          ),
                           DataCell(Text('${entry.impressions}')),
                           DataCell(Text('${entry.interactions}')),
                           DataCell(
@@ -972,7 +1022,19 @@ class _WebVitalsPanel extends StatelessWidget {
                       for (final page in pages)
                         DataRow(
                           cells: [
-                            DataCell(_BoundedReportText(page.pagePath ?? '/')),
+                            DataCell(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _BoundedReportText(page.pagePath ?? '/'),
+                                  UrlActionButtons(
+                                    rawUrl: page.pagePath ?? '/',
+                                    siteId: siteId,
+                                    iconSize: 14,
+                                  ),
+                                ],
+                              ),
+                            ),
                             DataCell(Text(page.metric)),
                             DataCell(Text(_value(page.metric, page.p75))),
                             DataCell(Text('${page.samples}')),
@@ -1571,11 +1633,12 @@ class _FlowPageNode extends StatelessWidget {
 }
 
 class _ReportRow {
-  const _ReportRow(this.title, this.subtitle, this.count);
+  const _ReportRow(this.title, this.subtitle, this.count, {this.url});
 
   final String title;
   final String? subtitle;
   final int count;
+  final String? url;
 }
 
 class _BehaviourPanel extends StatelessWidget {
@@ -1584,12 +1647,14 @@ class _BehaviourPanel extends StatelessWidget {
     required this.metric,
     required this.empty,
     required this.rows,
+    this.siteId,
   });
 
   final String title;
   final String metric;
   final String empty;
   final List<_ReportRow> rows;
+  final String? siteId;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -1626,7 +1691,11 @@ class _BehaviourPanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    if (row.url != null && row.url!.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      UrlActionButtons(rawUrl: row.url!, siteId: siteId),
+                    ],
+                    const SizedBox(width: 8),
                     Text('$metric · ${row.count}'),
                   ],
                 ),
@@ -1889,9 +1958,19 @@ class _AcquisitionMetric extends StatelessWidget {
         subtitle: details.isEmpty
             ? Text(context.tr('No campaign parameters', '无活动参数'))
             : Text(details.join(' · ')),
-        trailing: Text(
-          '${traffic.sessions} ${context.tr('visits', '次访问')}',
-          style: Theme.of(context).textTheme.titleMedium,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (traffic.source != null &&
+                resolveNavigableUrl(traffic.source) != null) ...[
+              UrlActionButtons(rawUrl: traffic.source!, iconSize: 15),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              '${traffic.sessions} ${context.tr('visits', '次访问')}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/i18n/app_i18n.dart';
 import '../../../core/network/seeray_api.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/site_audit_log.dart';
@@ -204,6 +205,15 @@ class _SiteAuditLogPageState extends ConsumerState<SiteAuditLogPage> {
           ].join('  ·  '),
         ),
         isThreeLine: entry.resourceId != null,
+        trailing: entry.resourceId != null || entry.actorEmail != null
+            ? CopyIconButton(
+                text: entry.resourceId ?? entry.actorEmail!,
+                tooltipEn: 'Copy ID',
+                tooltipZh: '复制标识',
+                copiedEn: 'Copied',
+                copiedZh: '已复制',
+              )
+            : null,
       ),
     );
   }

@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
 import '../../../shared/presentation/app_back_button.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../../auth/application/auth_controller.dart';
@@ -3096,6 +3097,10 @@ class _DashboardWidgetContent extends ConsumerWidget {
                         (row) => _TableRow(
                           label: row.path,
                           value: '${row.pageViews}',
+                          trailing: UrlActionButtons(
+                            rawUrl: row.path,
+                            siteId: query.siteId,
+                          ),
                         ),
                       )
                       .toList(),
@@ -3377,6 +3382,10 @@ class _DashboardWidgetContent extends ConsumerWidget {
                                   ? row.title!
                                   : row.path,
                               value: '${row.pageViews}',
+                              trailing: UrlActionButtons(
+                                rawUrl: row.path,
+                                siteId: query.siteId,
+                              ),
                             ),
                           )
                           .toList(),
@@ -3927,6 +3936,7 @@ class _LiveDashboardWidgetState extends ConsumerState<_LiveDashboardWidget> {
                         : visitor.currentPage ??
                               visitor.entryPage ??
                               context.tr('Unknown page', '未知页面');
+                    final targetUrl = visitor.currentPage ?? visitor.entryPage;
                     return _TableRow(
                       label: '${visitor.countryCode ?? '—'} · $page',
                       value:
@@ -3935,6 +3945,30 @@ class _LiveDashboardWidgetState extends ConsumerState<_LiveDashboardWidget> {
                         countryCode: visitor.countryCode,
                         size: 17,
                       ),
+                      trailing:
+                          (targetUrl != null && targetUrl.isNotEmpty) ||
+                              (visitor.ipAddress != null &&
+                                  visitor.ipAddress!.isNotEmpty)
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (visitor.ipAddress != null &&
+                                    visitor.ipAddress!.isNotEmpty)
+                                  CopyIconButton(
+                                    text: visitor.ipAddress!,
+                                    tooltipEn: 'Copy IP address',
+                                    tooltipZh: '复制 IP 地址',
+                                    copiedEn: 'IP copied',
+                                    copiedZh: '已复制 IP',
+                                  ),
+                                if (targetUrl != null && targetUrl.isNotEmpty)
+                                  UrlActionButtons(
+                                    rawUrl: targetUrl,
+                                    siteId: widget.query.siteId,
+                                  ),
+                              ],
+                            )
+                          : null,
                     );
                   }).toList(),
                 ),
@@ -4153,10 +4187,16 @@ Future<void> _saveAnalyticsExport(
 }
 
 class _TableRow extends StatelessWidget {
-  const _TableRow({required this.label, required this.value, this.leading});
+  const _TableRow({
+    required this.label,
+    required this.value,
+    this.leading,
+    this.trailing,
+  });
   final String label;
   final String value;
   final Widget? leading;
+  final Widget? trailing;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -4164,6 +4204,7 @@ class _TableRow extends StatelessWidget {
       children: [
         if (leading != null) ...[leading!, const SizedBox(width: 8)],
         Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
+        if (trailing != null) ...[trailing!, const SizedBox(width: 4)],
         Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
       ],
     ),

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../../shared/presentation/page_help_button.dart';
 import '../../../shared/presentation/site_top_bar.dart';
 import '../application/analytics_controller.dart';
@@ -414,7 +415,15 @@ class _SearchConsolePageState extends ConsumerState<SearchConsolePage> {
                 DataCell(
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
-                    child: SelectableText(row.key),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(child: SelectableText(row.key)),
+                        if (row.key.startsWith('http://') ||
+                            row.key.startsWith('https://'))
+                          UrlActionButtons(rawUrl: row.key),
+                      ],
+                    ),
                   ),
                 ),
                 DataCell(Text(_number(row.clicks))),
@@ -699,7 +708,14 @@ class _PropertyCard extends StatelessWidget {
                 ],
               )
             else
-              SelectableText(property.propertyUrl ?? '—'),
+              Row(
+                children: [
+                  Flexible(child: SelectableText(property.propertyUrl ?? '—')),
+                  if (property.propertyUrl != null &&
+                      property.propertyUrl!.isNotEmpty)
+                    UrlActionButtons(rawUrl: property.propertyUrl!),
+                ],
+              ),
             if (validation != null) ...[
               const SizedBox(height: 12),
               Row(

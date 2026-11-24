@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../application/analytics_controller.dart';
 import '../application/analytics_range.dart';
 import '../application/analytics_segment.dart';
@@ -268,9 +269,8 @@ class _VisitorVisitTile extends StatelessWidget {
       region: entry.region,
       city: entry.city,
     );
-    final detailsText = Text(
+    final metaLines = Text(
       [
-        if (path.isNotEmpty) path.join('  →  '),
         '${formatTimelineTime(context, entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
         ?perfSummary,
         if (entry.fingerprintRiskLevel != 'none')
@@ -285,7 +285,7 @@ class _VisitorVisitTile extends StatelessWidget {
                   '浏览器指纹匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 账号数：${entry.fingerprintRelatedAccountCount}',
                 ),
       ].join('\n'),
-      maxLines: perfSummary != null ? 3 : 2,
+      maxLines: perfSummary != null ? 2 : 1,
       overflow: TextOverflow.ellipsis,
     );
     return Card(
@@ -301,43 +301,89 @@ class _VisitorVisitTile extends StatelessWidget {
                 : Icons.person_outline,
           ),
         ),
-        title: Text(
-          visitorAssociationValue(
-            context,
-            view,
-            ipAddress: entry.ipAddress,
-            tlsFingerprintGroup: entry.tlsFingerprintGroup,
-            browserFingerprintGroup: entry.browserFingerprintGroup,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                visitorAssociationValue(
+                  context,
+                  view,
+                  ipAddress: entry.ipAddress,
+                  tlsFingerprintGroup: entry.tlsFingerprintGroup,
+                  browserFingerprintGroup: entry.browserFingerprintGroup,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (entry.ipAddress != null) ...[
+              const SizedBox(width: 2),
+              CopyIconButton(
+                text: entry.ipAddress!,
+                tooltipEn: view == VisitorAssociationView.ip
+                    ? 'Copy IP address'
+                    : 'Copy IP (${entry.ipAddress})',
+                tooltipZh: view == VisitorAssociationView.ip
+                    ? '复制 IP 地址'
+                    : '复制 IP (${entry.ipAddress})',
+                copiedEn: 'IP copied',
+                copiedZh: '已复制 IP',
+              ),
+            ],
+          ],
         ),
-        subtitle: location.isEmpty
-            ? detailsText
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (location.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  children: [
+                    CountryFlag(countryCode: entry.countryCode, size: 14),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    CopyIconButton(
+                      text: location,
+                      tooltipEn: 'Copy location',
+                      tooltipZh: '复制地理位置',
+                      copiedEn: 'Location copied',
+                      copiedZh: '地理位置已复制',
+                      iconSize: 13,
+                    ),
+                  ],
+                ),
+              ),
+            if (path.isNotEmpty)
+              Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Row(
-                      children: [
-                        CountryFlag(countryCode: entry.countryCode, size: 14),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            location,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
+                  Expanded(
+                    child: Text(
+                      path.join('  →  '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  detailsText,
+                  UrlActionButtons(
+                    rawUrl: entry.entryPage?.isNotEmpty == true
+                        ? entry.entryPage!
+                        : entry.exitPage!,
+                    siteId: siteId,
+                    iconSize: 14,
+                  ),
                 ],
               ),
+            metaLines,
+          ],
+        ),
         isThreeLine: true,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

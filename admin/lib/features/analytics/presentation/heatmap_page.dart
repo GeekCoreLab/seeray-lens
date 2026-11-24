@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../core/i18n/app_i18n.dart';
+import '../../../shared/presentation/data_actions.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/analytics_range.dart';
 import 'capture_view.dart';
@@ -296,11 +297,12 @@ class _HeatmapPageState extends ConsumerState<HeatmapPage> {
             itemBuilder: (context, index) {
               final item = pageItems[index];
               final active = identical(item, _selected);
+              final pageUrl = '${item['pageUrl'] ?? ''}';
               return ListTile(
                 dense: true,
                 selected: active,
                 title: Text(
-                  '${item['pageUrl']}',
+                  pageUrl,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -309,6 +311,9 @@ class _HeatmapPageState extends ConsumerState<HeatmapPage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                trailing: pageUrl.isNotEmpty
+                    ? UrlActionButtons(rawUrl: pageUrl, siteId: widget.siteId)
+                    : null,
                 onTap: () => _selectVariant(item),
               );
             },

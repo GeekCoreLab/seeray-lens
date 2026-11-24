@@ -1,13 +1,26 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
-val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val signingPropertiesFile = rootProject.file("key.properties")
+val signingProperties = Properties()
+if (signingPropertiesFile.exists()) {
+    FileInputStream(signingPropertiesFile).use(signingProperties::load)
+}
+
+val releaseKeystorePath =
+    signingProperties.getProperty("storeFile") ?: System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseKeystorePassword =
+    signingProperties.getProperty("storePassword") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias =
+    signingProperties.getProperty("keyAlias") ?: System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword =
+    signingProperties.getProperty("keyPassword") ?: System.getenv("ANDROID_KEY_PASSWORD")
 val hasReleaseSigning = listOf(
     releaseKeystorePath,
     releaseKeystorePassword,
