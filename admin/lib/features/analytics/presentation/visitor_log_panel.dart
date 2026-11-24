@@ -10,6 +10,7 @@ import '../application/visitor_profile_controller.dart';
 import 'device_performance_badge.dart';
 import 'timeline_date_formatter.dart';
 import 'visitor_association_controls.dart';
+import 'visitor_visuals.dart';
 
 class VisitorLogPanel extends ConsumerStatefulWidget {
   const VisitorLogPanel({required this.siteId, super.key});
@@ -93,8 +94,8 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                 isDense: true,
                 prefixIcon: const Icon(Icons.search),
                 hintText: context.tr(
-                  'Filter by selected signal or page',
-                  '按当前查看方式或页面筛选',
+                  'Filter by selected signal, location or page',
+                  '按当前查看方式、地理位置或页面筛选',
                 ),
                 suffixIcon: _search.text.isEmpty
                     ? null
@@ -131,6 +132,12 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                 final filtered = items
                     .where((item) {
                       if (needle.isEmpty) return true;
+                      final locationLabel = formatVisitorLocation(
+                        context,
+                        countryCode: item.countryCode,
+                        region: item.region,
+                        city: item.city,
+                      ).toLowerCase();
                       return visitorAssociationValue(
                             context,
                             _associationView,
@@ -139,6 +146,12 @@ class _VisitorLogPanelState extends ConsumerState<VisitorLogPanel> {
                             browserFingerprintGroup:
                                 item.browserFingerprintGroup,
                           ).toLowerCase().contains(needle) ||
+                          locationLabel.contains(needle) ||
+                          (item.countryCode ?? '').toLowerCase().contains(
+                            needle,
+                          ) ||
+                          (item.region ?? '').toLowerCase().contains(needle) ||
+                          (item.city ?? '').toLowerCase().contains(needle) ||
                           (item.entryPage ?? '').toLowerCase().contains(
                             needle,
                           ) ||
@@ -249,6 +262,32 @@ class _VisitorVisitTile extends StatelessWidget {
       pageLoadMs: entry.pageLoadMs,
       frameRateFps: entry.frameRateFps,
     );
+    final location = formatVisitorLocation(
+      context,
+      countryCode: entry.countryCode,
+      region: entry.region,
+      city: entry.city,
+    );
+    final detailsText = Text(
+      [
+        if (path.isNotEmpty) path.join('  →  '),
+        '${formatTimelineTime(context, entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
+        ?perfSummary,
+        if (entry.fingerprintRiskLevel != 'none')
+          !entry.fingerprintEvidenceTypes.contains('browser') &&
+                  entry.fingerprintConfidence == 'low'
+              ? context.tr(
+                  'JA4 match: ${entry.fingerprintRelatedVisitorCount} visitors · low confidence',
+                  'JA4 匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 低置信度',
+                )
+              : context.tr(
+                  'Browser fingerprint match: ${entry.fingerprintRelatedVisitorCount} visitors · accounts: ${entry.fingerprintRelatedAccountCount}',
+                  '浏览器指纹匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 账号数：${entry.fingerprintRelatedAccountCount}',
+                ),
+      ].join('\n'),
+      maxLines: perfSummary != null ? 3 : 2,
+      overflow: TextOverflow.ellipsis,
+    );
     return Card(
       margin: const EdgeInsets.only(top: 7),
       elevation: 0,
@@ -273,26 +312,32 @@ class _VisitorVisitTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Text(
-          [
-            if (path.isNotEmpty) path.join('  →  '),
-            '${formatTimelineTime(context, entry.startedAt)} · ${entry.pageViews} ${context.tr('pages', '页')} · ${entry.events} ${context.tr('events', '事件')}',
-            ?perfSummary,
-            if (entry.fingerprintRiskLevel != 'none')
-              !entry.fingerprintEvidenceTypes.contains('browser') &&
-                      entry.fingerprintConfidence == 'low'
-                  ? context.tr(
-                      'JA4 match: ${entry.fingerprintRelatedVisitorCount} visitors · low confidence',
-                      'JA4 匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 低置信度',
-                    )
-                  : context.tr(
-                      'Browser fingerprint match: ${entry.fingerprintRelatedVisitorCount} visitors · accounts: ${entry.fingerprintRelatedAccountCount}',
-                      '浏览器指纹匹配：${entry.fingerprintRelatedVisitorCount} 个访客 · 账号数：${entry.fingerprintRelatedAccountCount}',
+        subtitle: location.isEmpty
+            ? detailsText
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Row(
+                      children: [
+                        CountryFlag(countryCode: entry.countryCode, size: 14),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
                     ),
-          ].join('\n'),
-          maxLines: perfSummary != null ? 3 : 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+                  ),
+                  detailsText,
+                ],
+              ),
         isThreeLine: true,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

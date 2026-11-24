@@ -4,6 +4,93 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/i18n/app_i18n.dart';
+
+const Map<String, ({String en, String zh})> _countryNames = {
+  'CN': (en: 'China', zh: '中国'),
+  'US': (en: 'United States', zh: '美国'),
+  'AU': (en: 'Australia', zh: '澳大利亚'),
+  'JP': (en: 'Japan', zh: '日本'),
+  'GB': (en: 'United Kingdom', zh: '英国'),
+  'DE': (en: 'Germany', zh: '德国'),
+  'FR': (en: 'France', zh: '法国'),
+  'CA': (en: 'Canada', zh: '加拿大'),
+  'SG': (en: 'Singapore', zh: '新加坡'),
+  'HK': (en: 'Hong Kong', zh: '中国香港'),
+  'TW': (en: 'Taiwan', zh: '中国台湾'),
+  'MO': (en: 'Macau', zh: '中国澳门'),
+  'KR': (en: 'South Korea', zh: '韩国'),
+  'IN': (en: 'India', zh: '印度'),
+  'NL': (en: 'Netherlands', zh: '荷兰'),
+  'RU': (en: 'Russia', zh: '俄罗斯'),
+  'BR': (en: 'Brazil', zh: '巴西'),
+  'VN': (en: 'Vietnam', zh: '越南'),
+  'TH': (en: 'Thailand', zh: '泰国'),
+  'MY': (en: 'Malaysia', zh: '马来西亚'),
+  'ID': (en: 'Indonesia', zh: '印度尼西亚'),
+  'PH': (en: 'Philippines', zh: '菲律宾'),
+  'IT': (en: 'Italy', zh: '意大利'),
+  'ES': (en: 'Spain', zh: '西班牙'),
+  'SE': (en: 'Sweden', zh: '瑞典'),
+  'CH': (en: 'Switzerland', zh: '瑞士'),
+  'IE': (en: 'Ireland', zh: '爱尔兰'),
+  'NZ': (en: 'New Zealand', zh: '新西兰'),
+  'MX': (en: 'Mexico', zh: '墨西哥'),
+  'PL': (en: 'Poland', zh: '波兰'),
+  'TR': (en: 'Turkey', zh: '土耳其'),
+  'AE': (en: 'United Arab Emirates', zh: '阿联酋'),
+  'SA': (en: 'Saudi Arabia', zh: '沙特阿拉伯'),
+  'ZA': (en: 'South Africa', zh: '南非'),
+  'NO': (en: 'Norway', zh: '挪威'),
+  'FI': (en: 'Finland', zh: '芬兰'),
+  'DK': (en: 'Denmark', zh: '丹麦'),
+  'AT': (en: 'Austria', zh: '奥地利'),
+  'BE': (en: 'Belgium', zh: '比利时'),
+  'PT': (en: 'Portugal', zh: '葡萄牙'),
+  'UA': (en: 'Ukraine', zh: '乌克兰'),
+  'AR': (en: 'Argentina', zh: '阿根廷'),
+  'CL': (en: 'Chile', zh: '智利'),
+  'CO': (en: 'Colombia', zh: '哥伦比亚'),
+  'IL': (en: 'Israel', zh: '以色列'),
+  'PK': (en: 'Pakistan', zh: '巴基斯坦'),
+  'BD': (en: 'Bangladesh', zh: '孟加拉国'),
+  'NG': (en: 'Nigeria', zh: '尼日利亚'),
+  'EG': (en: 'Egypt', zh: '埃及'),
+};
+
+String? countryDisplayName(BuildContext context, String? countryCode) {
+  final code = countryCode?.trim().toUpperCase() ?? '';
+  if (code.isEmpty) return null;
+  final entry = _countryNames[code];
+  if (entry != null) {
+    return context.isChinese ? entry.zh : entry.en;
+  }
+  return code;
+}
+
+String formatVisitorLocation(
+  BuildContext context, {
+  String? countryCode,
+  String? region,
+  String? city,
+}) {
+  final country = countryDisplayName(context, countryCode);
+  final rawParts = context.isChinese
+      ? <String?>[country, region, city]
+      : <String?>[city, region, country];
+  final seen = <String>{};
+  final parts = <String>[];
+  for (final raw in rawParts) {
+    final trimmed = raw?.trim() ?? '';
+    if (trimmed.isEmpty) continue;
+    final key = trimmed.toLowerCase();
+    if (seen.add(key)) {
+      parts.add(trimmed);
+    }
+  }
+  return parts.join(' · ');
+}
+
 /// A small local marker for country codes. Regional indicator glyphs are
 /// rendered by the platform emoji font; the code remains available as a
 /// readable fallback beside the marker.

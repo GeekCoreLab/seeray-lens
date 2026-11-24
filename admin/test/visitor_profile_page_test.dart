@@ -54,10 +54,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(ListTile, '203.0.113.45'), findsOneWidget);
+    expect(
+      find.text('San Francisco · California · United States'),
+      findsOneWidget,
+    );
     expect(find.textContaining('visitor-123456'), findsNothing);
     await tester.enterText(find.byType(TextField), 'no-match');
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, '203.0.113.45'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'San Francisco');
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, '203.0.113.45'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '203.0.113.45');
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, '203.0.113.45'), findsOneWidget);
@@ -66,6 +73,10 @@ void main() {
 
     expect(find.text('Visitor profile'), findsOneWidget);
     expect(find.text('203.0.113.45'), findsOneWidget);
+    expect(
+      find.text('San Francisco · California · United States'),
+      findsNWidgets(2),
+    );
     expect(find.textContaining('visitor-123456'), findsNothing);
     expect(find.text('Linked browser profiles'), findsOneWidget);
     expect(find.text('2'), findsWidgets);
@@ -170,6 +181,9 @@ class _VisitorApi extends SeeRayApi {
         {
           'visitorId': 'visitor-123456',
           'ipAddress': '203.0.113.45',
+          'countryCode': 'US',
+          'region': 'California',
+          'city': 'San Francisco',
           'startedAt': '2026-09-18T10:00:00Z',
           'lastActivityAt': '2026-09-18T10:03:00Z',
           'entryPage': '/pricing',

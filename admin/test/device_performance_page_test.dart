@@ -66,6 +66,12 @@ void main() {
 
     expect(find.text('203.0.113.10'), findsOneWidget);
     expect(find.text('203.0.113.20'), findsOneWidget);
+    expect(
+      find.text('San Francisco · California · United States'),
+      findsOneWidget,
+    );
+    expect(find.text('南京市 · 江苏省 · 中国'), findsNothing);
+    expect(find.text('南京市 · 江苏省 · China'), findsOneWidget);
     expect(find.textContaining('visitor-secret-high'), findsNothing);
     expect(find.textContaining('visitor-secret-low'), findsNothing);
     expect(find.text('High · 92'), findsOneWidget);
@@ -78,6 +84,10 @@ void main() {
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
     await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '南京市');
+    await tester.pumpAndSettle();
+    expect(find.text('203.0.113.20'), findsOneWidget);
+    expect(find.text('203.0.113.10'), findsNothing);
     await tester.enterText(find.byType(TextField).first, '203.0.113.10');
     await tester.pumpAndSettle();
     final matchedVisitorText = find.byWidgetPredicate(
@@ -217,6 +227,9 @@ class _DevicePerformanceApi extends SeeRayApi {
           {
             'visitorId': 'visitor-secret-high',
             'ipAddress': '203.0.113.10',
+            'countryCode': 'US',
+            'region': 'California',
+            'city': 'San Francisco',
             'lastSeenAt': '2026-10-01T10:00:00Z',
             'sessions': 1,
             'browser': 'Chrome',
@@ -240,6 +253,9 @@ class _DevicePerformanceApi extends SeeRayApi {
           {
             'visitorId': 'visitor-secret-low',
             'ipAddress': '203.0.113.20',
+            'countryCode': 'CN',
+            'region': '江苏省',
+            'city': '南京市',
             'lastSeenAt': '2026-10-01T09:00:00Z',
             'sessions': 1,
             'browser': 'Firefox',

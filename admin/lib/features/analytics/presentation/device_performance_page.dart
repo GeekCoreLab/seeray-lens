@@ -431,8 +431,8 @@ class _DevicePerformanceBody extends StatelessWidget {
                         isDense: true,
                         prefixIcon: const Icon(Icons.search),
                         hintText: context.tr(
-                          'Filter by IP, browser, OS, device or network',
-                          '按 IP、浏览器、系统、设备或网络筛选',
+                          'Filter by IP, location, browser, OS, device or network',
+                          '按 IP、地理位置、浏览器、系统、设备或网络筛选',
                         ),
                         suffixIcon: searchController.text.isEmpty
                             ? null
@@ -541,7 +541,17 @@ class _DevicePerformanceBody extends StatelessWidget {
           final ipText =
               (visitor.ipAddress ?? context.tr('IP unavailable', 'IP 暂不可用'))
                   .toLowerCase();
+          final locationText = formatVisitorLocation(
+            context,
+            countryCode: visitor.countryCode,
+            region: visitor.region,
+            city: visitor.city,
+          ).toLowerCase();
           return ipText.contains(needle) ||
+              locationText.contains(needle) ||
+              (visitor.countryCode ?? '').toLowerCase().contains(needle) ||
+              (visitor.region ?? '').toLowerCase().contains(needle) ||
+              (visitor.city ?? '').toLowerCase().contains(needle) ||
               (visitor.browser ?? '').toLowerCase().contains(needle) ||
               (visitor.operatingSystem ?? '').toLowerCase().contains(needle) ||
               (visitor.deviceType ?? '').toLowerCase().contains(needle) ||
@@ -788,6 +798,12 @@ class _VisitorPerformanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ipLabel =
         visitor.ipAddress ?? context.tr('IP unavailable', 'IP 暂不可用');
+    final location = formatVisitorLocation(
+      context,
+      countryCode: visitor.countryCode,
+      region: visitor.region,
+      city: visitor.city,
+    );
     final chips = formatDeviceHardwareChips(
       context,
       hardwareConcurrency: visitor.hardwareConcurrency,
@@ -861,7 +877,8 @@ class _VisitorPerformanceCard extends StatelessWidget {
                   const Icon(Icons.chevron_right),
                 ],
               ),
-              if (visitor.browser != null ||
+              if (location.isNotEmpty ||
+                  visitor.browser != null ||
                   visitor.operatingSystem != null ||
                   chips.isNotEmpty) ...[
                 const SizedBox(height: 10),
@@ -869,6 +886,22 @@ class _VisitorPerformanceCard extends StatelessWidget {
                   spacing: 7,
                   runSpacing: 6,
                   children: [
+                    if (location.isNotEmpty)
+                      Chip(
+                        avatar: visitor.countryCode != null
+                            ? CountryFlag(
+                                countryCode: visitor.countryCode,
+                                size: 16,
+                              )
+                            : const Icon(Icons.place_outlined, size: 16),
+                        label: Text(
+                          location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                      ),
                     if (visitor.browser != null)
                       Chip(
                         avatar: VisitorPlatformMark(

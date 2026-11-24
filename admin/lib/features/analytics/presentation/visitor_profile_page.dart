@@ -253,11 +253,22 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
     final profile = widget.profile;
     final siteId = widget.siteId;
     String? latestIpAddress;
+    String latestLocation = '';
     for (final session in profile.sessions) {
-      if (session.ipAddress != null && session.ipAddress!.isNotEmpty) {
+      if (latestIpAddress == null &&
+          session.ipAddress != null &&
+          session.ipAddress!.isNotEmpty) {
         latestIpAddress = session.ipAddress;
-        break;
       }
+      if (latestLocation.isEmpty) {
+        latestLocation = formatVisitorLocation(
+          context,
+          countryCode: session.countryCode,
+          region: session.region,
+          city: session.city,
+        );
+      }
+      if (latestIpAddress != null && latestLocation.isNotEmpty) break;
     }
     final bounceRate = profile.rangeSessions == 0
         ? 0.0
@@ -322,6 +333,28 @@ class _VisitorProfileBodyState extends ConsumerState<_VisitorProfileBody> {
                         latestIpAddress ??
                             context.tr('IP unavailable', 'IP 暂不可用'),
                       ),
+                      if (latestLocation.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.place_outlined,
+                                size: 15,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  latestLocation,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       if (profile.fingerprintRiskLevel != 'none')
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
@@ -610,11 +643,12 @@ class _VisitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final location = [visit.city, visit.region, visit.countryCode]
-        .whereType<String>()
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .join(' · ');
+    final location = formatVisitorLocation(
+      context,
+      countryCode: visit.countryCode,
+      region: visit.region,
+      city: visit.city,
+    );
     final campaign = [
       visit.campaignSource,
       visit.campaignMedium,

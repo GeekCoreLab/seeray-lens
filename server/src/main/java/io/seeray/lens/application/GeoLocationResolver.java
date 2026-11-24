@@ -16,21 +16,61 @@ public class GeoLocationResolver {
     private static final Set<String> CONTINENTS = Set.of("AF", "AN", "AS", "EU", "NA", "OC", "SA");
     private final boolean enabled;
     private final List<Network> trustedProxies;
+    private final IpGeoLookupService ipGeoLookupService;
 
     @Inject
     public GeoLocationResolver(
             @ConfigProperty(name = "seeray.geo.location.enabled", defaultValue = "false") boolean enabled,
-            @ConfigProperty(name = "seeray.geo.trusted-proxy-cidrs", defaultValue = "") String trustedProxyCidrs) {
+            @ConfigProperty(name = "seeray.geo.trusted-proxy-cidrs", defaultValue = "") String trustedProxyCidrs,
+            IpGeoLookupService ipGeoLookupService) {
         this.enabled = enabled;
         this.trustedProxies = parseNetworks(trustedProxyCidrs);
+        this.ipGeoLookupService = ipGeoLookupService;
+    }
+
+    public GeoLocationResolver(boolean enabled, String trustedProxyCidrs) {
+        this(enabled, trustedProxyCidrs, null);
     }
 
     public boolean configured() {
-        return enabled && !trustedProxies.isEmpty();
+        return (enabled && !trustedProxies.isEmpty()) || (ipGeoLookupService != null && ipGeoLookupService.isEnabled());
     }
 
     public Location resolve(HttpServerRequest request) {
         return resolve(request.remoteAddress().host(), request.headers());
+    }
+
+    /**
+     * Resolves coarse location from trusted proxy headers first, falling back to external IP lookup
+     * using the site's configured client IP resolution mode.
+     */
+    public Location resolve(Site site, HttpServerRequest request) {
+        if (request == null) return Location.empty();
+        if (request.remoteAddress() != null) {
+            Location fromHeaders = resolve(request.remoteAddress().host(), request.headers());
+            if (!fromHeaders.isEmpty()) return fromHeaders;
+        }
+        if (ipGeoLookupService != null && ipGeoLookupService.isEnabled()) {
+            String ip = clientIp(site, request);
+            if (ip != null) {
+                return ipGeoLookupService.lookup(ip);
+            }
+        }
+        return Location.empty();
+    }
+
+    public Location resolveByIp(String ip) {
+        if (ip == null || ipGeoLookupService == null || !ipGeoLookupService.isEnabled()) {
+            return Location.empty();
+        }
+        return ipGeoLookupService.lookup(ip);
+    }
+
+    public Map<String, Location> resolveByIps(Collection<String> ips) {
+        if (ips == null || ips.isEmpty() || ipGeoLookupService == null || !ipGeoLookupService.isEnabled()) {
+            return Map.of();
+        }
+        return ipGeoLookupService.lookupBatch(ips);
     }
 
     /** Whether the immediate connection peer is one of the explicitly configured edge proxies. */
@@ -181,7 +221,7 @@ public class GeoLocationResolver {
 
     public record Location(
             String countryCode, String continentCode, String regionCode, String region, String city, String timezone) {
-        static Location empty() {
+        public static Location empty() {
             return new Location(null, null, null, null, null, null);
         }
 

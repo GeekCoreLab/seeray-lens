@@ -18,6 +18,7 @@ public class AnalyticsQueryService {
     private final WorkspaceAccess access;
     private final ObjectMapper mapper;
     private final FingerprintRiskService fingerprintRisk;
+    private final GeoLocationResolver geoLocationResolver;
 
     @Inject
     public AnalyticsQueryService(
@@ -25,16 +26,18 @@ public class AnalyticsQueryService {
             SiteService sites,
             WorkspaceAccess access,
             ObjectMapper mapper,
-            FingerprintRiskService fingerprintRisk) {
+            FingerprintRiskService fingerprintRisk,
+            GeoLocationResolver geoLocationResolver) {
         this.dataSource = dataSource;
         this.sites = sites;
         this.access = access;
         this.mapper = mapper;
         this.fingerprintRisk = fingerprintRisk;
+        this.geoLocationResolver = geoLocationResolver;
     }
 
     public AnalyticsQueryService(DataSource dataSource, SiteService sites, WorkspaceAccess access) {
-        this(dataSource, sites, access, new ObjectMapper(), new FingerprintRiskService(dataSource));
+        this(dataSource, sites, access, new ObjectMapper(), new FingerprintRiskService(dataSource), null);
     }
 
     public Range range(UUID siteId, String fromValue, String toValue) {
@@ -172,7 +175,8 @@ public class AnalyticsQueryService {
                 select v.client_visitor_id,s.client_session_id,host(s.client_ip),s.started_at,s.last_activity_at,s.entry_page,s.exit_page,s.page_view_count,s.event_count,s.duration_ms,s.is_bounce,s.visitor_type,
                   (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='ja4' order by o.observed_at desc limit 1),
                   (select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=s.site_id and o.client_visitor_id=v.client_visitor_id and o.client_session_id=s.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1),
-                  s.performance_score,s.performance_tier,s.hardware_concurrency,s.device_memory_gb,s.connection_type,s.page_load_ms,s.frame_rate_fps
+                  s.performance_score,s.performance_tier,s.hardware_concurrency,s.device_memory_gb,s.connection_type,s.page_load_ms,s.frame_rate_fps,
+                  s.country_code,s.region_name,s.city
                 from analytics_session s join analytics_visitor v on v.id=s.visitor_id
                 where s.site_id=? and (s.started_at at time zone (select timezone from site where id=?))::date between ? and ?
                 order by s.started_at desc limit ?
@@ -218,7 +222,10 @@ public class AnalyticsQueryService {
                             nullableDouble(r, 18),
                             r.getString(19),
                             nullableInt(r, 20),
-                            nullableInt(r, 21)));
+                            nullableInt(r, 21),
+                            r.getString(22),
+                            r.getString(23),
+                            r.getString(24)));
                     signals.add(new VisitorAssociationGroups.Signal(recordKey, r.getString(13), r.getString(14)));
                 }
             }
@@ -228,7 +235,7 @@ public class AnalyticsQueryService {
                 labeled.add(out.get(index)
                         .withFingerprintGroups(groups.get(signals.get(index).recordKey())));
             }
-            return labeled;
+            return enrichVisitorLogLocations(labeled, geoLocationResolver);
         } catch (SQLException e) {
             throw new IllegalStateException("Could not query visitor log", e);
         }
@@ -419,7 +426,7 @@ public class AnalyticsQueryService {
                             .withFingerprintGroups(groups.get(row.visitor().visitorId() + "|"
                                     + row.visitor().sessionId())))
                     .toList();
-            return visitors;
+            return enrichLiveVisitorLocations(visitors, geoLocationResolver);
         } catch (SQLException error) {
             throw new IllegalStateException("Could not query realtime visitors", error);
         }
@@ -479,6 +486,68 @@ public class AnalyticsQueryService {
 
     private static double ratio(long value, long total) {
         return total == 0 ? 0d : (double) value / total;
+    }
+
+    static List<VisitorLog> enrichVisitorLogLocations(List<VisitorLog> entries, GeoLocationResolver resolver) {
+        if (resolver == null || entries.isEmpty()) return entries;
+        Set<String> missingIps = new LinkedHashSet<>();
+        for (VisitorLog entry : entries) {
+            if (entry.countryCode() == null
+                    && entry.region() == null
+                    && entry.city() == null
+                    && entry.ipAddress() != null
+                    && !entry.ipAddress().isBlank()) {
+                missingIps.add(entry.ipAddress());
+            }
+        }
+        if (missingIps.isEmpty()) return entries;
+        Map<String, GeoLocationResolver.Location> resolved = resolver.resolveByIps(missingIps);
+        if (resolved.isEmpty()) return entries;
+        return entries.stream()
+                .map(entry -> {
+                    if (entry.countryCode() != null
+                            || entry.region() != null
+                            || entry.city() != null
+                            || entry.ipAddress() == null) {
+                        return entry;
+                    }
+                    GeoLocationResolver.Location loc = resolved.get(entry.ipAddress());
+                    return loc == null || loc.isEmpty()
+                            ? entry
+                            : entry.withLocation(loc.countryCode(), loc.region(), loc.city());
+                })
+                .toList();
+    }
+
+    static List<LiveVisitor> enrichLiveVisitorLocations(List<LiveVisitor> visitors, GeoLocationResolver resolver) {
+        if (resolver == null || visitors.isEmpty()) return visitors;
+        Set<String> missingIps = new LinkedHashSet<>();
+        for (LiveVisitor visitor : visitors) {
+            if (visitor.countryCode() == null
+                    && visitor.region() == null
+                    && visitor.city() == null
+                    && visitor.ipAddress() != null
+                    && !visitor.ipAddress().isBlank()) {
+                missingIps.add(visitor.ipAddress());
+            }
+        }
+        if (missingIps.isEmpty()) return visitors;
+        Map<String, GeoLocationResolver.Location> resolved = resolver.resolveByIps(missingIps);
+        if (resolved.isEmpty()) return visitors;
+        return visitors.stream()
+                .map(visitor -> {
+                    if (visitor.countryCode() != null
+                            || visitor.region() != null
+                            || visitor.city() != null
+                            || visitor.ipAddress() == null) {
+                        return visitor;
+                    }
+                    GeoLocationResolver.Location loc = resolved.get(visitor.ipAddress());
+                    return loc == null || loc.isEmpty()
+                            ? visitor
+                            : visitor.withLocation(loc.countryCode(), loc.region(), loc.city());
+                })
+                .toList();
     }
 
     static Integer nullableInt(ResultSet row, int column) throws SQLException {
@@ -577,7 +646,10 @@ public class AnalyticsQueryService {
             Double deviceMemoryGb,
             String connectionType,
             Integer pageLoadMs,
-            Integer frameRateFps) {
+            Integer frameRateFps,
+            String countryCode,
+            String region,
+            String city) {
         VisitorLog withFingerprintGroups(VisitorAssociationGroups.Labels labels) {
             return new VisitorLog(
                     visitorId,
@@ -605,7 +677,43 @@ public class AnalyticsQueryService {
                     deviceMemoryGb,
                     connectionType,
                     pageLoadMs,
-                    frameRateFps);
+                    frameRateFps,
+                    countryCode,
+                    region,
+                    city);
+        }
+
+        VisitorLog withLocation(String countryCode, String region, String city) {
+            return new VisitorLog(
+                    visitorId,
+                    startedAt,
+                    lastActivityAt,
+                    entryPage,
+                    exitPage,
+                    pageViews,
+                    events,
+                    durationMs,
+                    bounce,
+                    visitorType,
+                    fingerprintRiskLevel,
+                    fingerprintRelatedVisitorCount,
+                    fingerprintRelatedAccountCount,
+                    fingerprintLastObservedAt,
+                    fingerprintConfidence,
+                    fingerprintEvidenceTypes,
+                    ipAddress,
+                    tlsFingerprintGroup,
+                    browserFingerprintGroup,
+                    performanceScore,
+                    performanceTier,
+                    hardwareConcurrency,
+                    deviceMemoryGb,
+                    connectionType,
+                    pageLoadMs,
+                    frameRateFps,
+                    countryCode,
+                    region,
+                    city);
         }
 
         public VisitorLog(
@@ -636,6 +744,9 @@ public class AnalyticsQueryService {
                     null,
                     "none",
                     List.of(),
+                    null,
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -795,6 +906,40 @@ public class AnalyticsQueryService {
                     ipAddress,
                     labels == null ? null : labels.tlsFingerprintGroup(),
                     labels == null ? null : labels.browserFingerprintGroup(),
+                    performanceScore,
+                    performanceTier,
+                    hardwareConcurrency,
+                    deviceMemoryGb,
+                    connectionType,
+                    pageLoadMs,
+                    frameRateFps);
+        }
+
+        LiveVisitor withLocation(String countryCode, String region, String city) {
+            return new LiveVisitor(
+                    visitorId,
+                    sessionId,
+                    startedAt,
+                    lastActivityAt,
+                    events,
+                    pageViews,
+                    entryPage,
+                    lastEventType,
+                    currentPage,
+                    currentTitle,
+                    countryCode,
+                    region,
+                    city,
+                    browser,
+                    operatingSystem,
+                    deviceType,
+                    language,
+                    durationMs,
+                    actions,
+                    uniqueIdentity,
+                    ipAddress,
+                    tlsFingerprintGroup,
+                    browserFingerprintGroup,
                     performanceScore,
                     performanceTier,
                     hardwareConcurrency,

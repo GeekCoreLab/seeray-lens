@@ -75,6 +75,24 @@ public class PixelTrackingResource {
             if (!allowed(page.host(), sites.trackingDomains(site.id))) return;
             UUID visitor = cookie(headers, visitorCookie(trackingId));
             UUID session = cookie(headers, sessionCookie(trackingId));
+            String clientIp = site.requireConsent ? null : geoLocationResolver.clientIp(site, request);
+            GeoLocationResolver.Location location = site.requireConsent
+                    ? GeoLocationResolver.Location.empty()
+                    : geoLocationResolver.resolve(site, request);
+            Map<String, Object> eventPayload = new LinkedHashMap<>();
+            eventPayload.put("visitorId", visitor.toString());
+            eventPayload.put("sessionId", session.toString());
+            if (location != null && !location.isEmpty()) {
+                Map<String, Object> context = new LinkedHashMap<>();
+                context.put("countryCode", location.countryCode());
+                if (location.continentCode() != null) context.put("continentCode", location.continentCode());
+                if (location.regionCode() != null) context.put("regionCode", location.regionCode());
+                if (location.region() != null) context.put("region", location.region());
+                if (location.city() != null) context.put("city", location.city());
+                if (location.timezone() != null) context.put("geoTimezone", location.timezone());
+                eventPayload.put("context", context);
+            }
+            eventPayload.put("data", Map.of("fallback", "pixel"));
             TrackingMessage message = new TrackingMessage(
                     1,
                     UuidV7.next(),
@@ -86,15 +104,7 @@ public class PixelTrackingResource {
                     page,
                     new TrackingSanitizer.CleanUrl(
                             null, null, null, null, null, null, null, null, null, null, null, null, null),
-                    TrackingSanitizer.json(
-                            Map.of(
-                                    "visitorId",
-                                    visitor.toString(),
-                                    "sessionId",
-                                    session.toString(),
-                                    "data",
-                                    Map.of("fallback", "pixel")),
-                            mapper),
+                    TrackingSanitizer.json(eventPayload, mapper),
                     null,
                     visitor.toString(),
                     session.toString(),
@@ -106,7 +116,7 @@ public class PixelTrackingResource {
                             ? ja4FingerprintResolver.hash(site.id, request)
                             : null,
                     null,
-                    site.requireConsent ? null : geoLocationResolver.clientIp(site, request));
+                    clientIp);
             publisher
                     .sendMessage(Message.of(mapper.writeValueAsString(message)))
                     .await()

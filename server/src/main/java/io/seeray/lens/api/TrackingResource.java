@@ -72,7 +72,9 @@ public class TrackingResource {
         if (site == null || !site.trackingEnabled)
             throw new ControlPlaneException(404, "TRACKING_UNAVAILABLE", "Tracking endpoint unavailable");
         List<SiteAllowedDomain> allowed = sites.trackingDomains(site.id);
-        GeoLocationResolver.Location location = geoLocationResolver.resolve(httpRequest);
+        boolean hasPageView = request.events().stream().anyMatch(event -> "page_view".equals(event.type()));
+        GeoLocationResolver.Location location =
+                hasPageView ? geoLocationResolver.resolve(site, httpRequest) : GeoLocationResolver.Location.empty();
         String requestOrigin = origin != null && !origin.isBlank() ? origin : referer;
         for (TrackingPayload.TrackingEvent event : request.events()) {
             boolean clientError = "client_error".equals(event.type());

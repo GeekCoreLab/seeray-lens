@@ -37,9 +37,9 @@ class LocationsPage extends ConsumerWidget {
                 englishTitle: 'Visitor locations',
                 chineseTitle: '访客地域说明',
                 englishBody:
-                    'Location is estimated from the visitor IP by your trusted edge proxy and is attached to the first page view of a visit. This report stores only coarse location dimensions; Live and Visitors views retain accepted-event IP addresses under a 30-day policy. Configure a trusted proxy and its country/location headers on the server.',
+                    'Location is resolved from trusted edge proxy headers or the server IP geolocation lookup service (SEERAY_GEO_IP_LOOKUP_ENABLED) and is attached to the first page view of a visit. This report stores only coarse location dimensions; Live and Visitors views retain accepted-event IP addresses under a 30-day policy.',
                 chineseBody:
-                    '访客地域由可信边缘代理根据 IP 估算，并记录在每次访问的首个页面浏览上。本报表只保存粗粒度地域字段；实时访客和访客页面按 30 天策略保留已接收事件的 IP。请在服务端配置可信代理及地域请求头。',
+                    '访客地域优先读取可信边缘代理请求头，否则由服务端通过 IP 地理定位接口（SEERAY_GEO_IP_LOOKUP_ENABLED）解析并记录在每次访问的首个页面浏览上。本报表只保存粗粒度地域字段；实时访客和访客页面按 30 天策略保留已接收事件的 IP。',
               ),
             ),
       body: report.when(
@@ -151,8 +151,8 @@ class _LocationReportState extends State<_LocationReport> {
                   const SizedBox(height: 6),
                   Text(
                     context.tr(
-                      'Enable SEERAY_GEO_LOCATION_ENABLED and set SEERAY_GEO_TRUSTED_PROXY_CIDRS to the exact proxy CIDRs. Configure Cloudflare location headers at the edge. Do not trust headers from arbitrary clients.',
-                      '请启用 SEERAY_GEO_LOCATION_ENABLED，并将 SEERAY_GEO_TRUSTED_PROXY_CIDRS 设置为精确的代理网段，同时在 Cloudflare 边缘配置地域请求头。不要信任任意客户端传入的请求头。',
+                      'Enable SEERAY_GEO_IP_LOOKUP_ENABLED for automatic IP geolocation lookup, or enable SEERAY_GEO_LOCATION_ENABLED with SEERAY_GEO_TRUSTED_PROXY_CIDRS for edge proxy location headers.',
+                      '请启用 SEERAY_GEO_IP_LOOKUP_ENABLED 以自动查询访客 IP 地理位置，或启用 SEERAY_GEO_LOCATION_ENABLED 并配置 SEERAY_GEO_TRUSTED_PROXY_CIDRS 以读取边缘代理地域请求头。',
                     ),
                   ),
                 ],
@@ -279,10 +279,10 @@ class _LocationReportState extends State<_LocationReport> {
               child: Text(
                 context.tr(
                   widget.data.sourceConfigured
-                      ? 'No location data yet. New visits will appear when the trusted edge proxy provides valid location headers.'
+                      ? 'No location data yet. New visits will appear once public visitor IPs or trusted edge proxy headers resolve to a location.'
                       : 'No location data is available until collection is configured.',
                   widget.data.sourceConfigured
-                      ? '暂无地域数据。可信边缘代理提供有效地域请求头后，新访问会显示在这里。'
+                      ? '暂无地域数据。收到公网访客 IP 或可信边缘代理地域请求头后，新访问会显示在这里。'
                       : '完成地域采集配置后，这里才会显示数据。',
                 ),
               ),

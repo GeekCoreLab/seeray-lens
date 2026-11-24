@@ -12,6 +12,7 @@ import 'merged_timeline_action.dart';
 import 'timeline_date_formatter.dart';
 import 'visitor_association_controls.dart';
 import 'visitor_timezone_utils.dart';
+import 'visitor_visuals.dart';
 
 class RealtimePage extends ConsumerStatefulWidget {
   const RealtimePage({required this.siteId, this.embedded = false, super.key});
@@ -278,11 +279,12 @@ class _LiveVisitCard extends StatelessWidget {
     final page = visitor.currentTitle?.isNotEmpty == true
         ? visitor.currentTitle!
         : visitor.currentPage ?? context.tr('Unknown page', '未知页面');
-    final location = [visitor.city, visitor.region, visitor.countryCode]
-        .whereType<String>()
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .join(' · ');
+    final location = formatVisitorLocation(
+      context,
+      countryCode: visitor.countryCode,
+      region: visitor.region,
+      city: visitor.city,
+    );
     final association = visitorAssociationValue(
       context,
       view,
@@ -309,7 +311,11 @@ class _LiveVisitCard extends StatelessWidget {
         ),
         title: Text(page, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
-          '$association · ${_relativeTime(context, visitor.lastActivityAt)}',
+          [
+            association,
+            if (location.isNotEmpty) location,
+            _relativeTime(context, visitor.lastActivityAt),
+          ].join(' · '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -333,7 +339,17 @@ class _LiveVisitCard extends StatelessWidget {
                   text: '${context.tr('IP', 'IP')}: ${visitor.ipAddress}',
                 ),
               if (location.isNotEmpty)
-                _InfoChip(icon: Icons.place_outlined, text: location),
+                Chip(
+                  avatar: visitor.countryCode != null
+                      ? CountryFlag(countryCode: visitor.countryCode, size: 16)
+                      : const Icon(Icons.place_outlined, size: 16),
+                  label: Text(
+                    location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
               if (visitor.deviceType != null)
                 _InfoChip(
                   icon: Icons.devices_outlined,

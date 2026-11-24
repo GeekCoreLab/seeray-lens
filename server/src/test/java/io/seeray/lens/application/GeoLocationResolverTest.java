@@ -2,6 +2,7 @@ package io.seeray.lens.application;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.seeray.lens.domain.site.Site;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpServerRequest;
@@ -110,6 +111,42 @@ class GeoLocationResolverTest {
         // Trusted proxy -> use CF-Connecting-IP
         HttpServerRequest trusted = mockRequest("192.0.2.18", Map.of("CF-Connecting-IP", "203.0.113.10"));
         assertEquals("203.0.113.10", resolver.clientIp(site, trusted));
+    }
+
+    @Test
+    void configuredAndFallsBackToIpLookupUsingSiteIpMode() {
+        IpGeoLookupGateway gateway = ip -> {
+            if ("114.114.114.114".equals(ip)) {
+                return IpGeoLookupGateway.LookupResult.found(
+                        new GeoLocationResolver.Location("CN", "AS", null, "江苏省", "南京市", null));
+            }
+            if ("1.1.1.1".equals(ip)) {
+                return IpGeoLookupGateway.LookupResult.found(
+                        new GeoLocationResolver.Location("AU", "OC", null, "Queensland", "Brisbane", null));
+            }
+            return IpGeoLookupGateway.LookupResult.notFound();
+        };
+        IpGeoLookupService lookupService =
+                new IpGeoLookupService(gateway, null, new ObjectMapper(), true, "community", 3600, 300);
+        GeoLocationResolver resolver = new GeoLocationResolver(false, "", lookupService);
+
+        assertTrue(resolver.configured());
+
+        Site headerSite = new Site();
+        headerSite.ipLookupMode = "HEADER";
+        headerSite.ipLookupHeader = "X-Forwarded-For";
+        HttpServerRequest headerRequest =
+                mockRequest("10.0.0.1", Map.of("X-Forwarded-For", "114.114.114.114, 10.0.0.2"));
+        GeoLocationResolver.Location headerLocation = resolver.resolve(headerSite, headerRequest);
+        assertEquals("CN", headerLocation.countryCode());
+        assertEquals("南京市", headerLocation.city());
+
+        Site networkSite = new Site();
+        networkSite.ipLookupMode = "NETWORK";
+        HttpServerRequest networkRequest = mockRequest("1.1.1.1", Map.of("X-Forwarded-For", "114.114.114.114"));
+        GeoLocationResolver.Location networkLocation = resolver.resolve(networkSite, networkRequest);
+        assertEquals("AU", networkLocation.countryCode());
+        assertEquals("Brisbane", networkLocation.city());
     }
 
     private HttpServerRequest mockRequest(String remoteHost, Map<String, String> headers) {

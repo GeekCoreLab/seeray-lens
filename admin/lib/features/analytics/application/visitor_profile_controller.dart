@@ -30,6 +30,9 @@ class AnalyticsVisitorLogEntry {
     this.connectionType,
     this.pageLoadMs,
     this.frameRateFps,
+    this.countryCode,
+    this.region,
+    this.city,
   });
 
   final String visitorId;
@@ -57,6 +60,9 @@ class AnalyticsVisitorLogEntry {
   final String? connectionType;
   final int? pageLoadMs;
   final int? frameRateFps;
+  final String? countryCode;
+  final String? region;
+  final String? city;
 
   factory AnalyticsVisitorLogEntry.fromJson(
     Map<String, dynamic> json,
@@ -91,6 +97,9 @@ class AnalyticsVisitorLogEntry {
     connectionType: json['connectionType'] as String?,
     pageLoadMs: (json['pageLoadMs'] as num?)?.toInt(),
     frameRateFps: (json['frameRateFps'] as num?)?.toInt(),
+    countryCode: json['countryCode'] as String?,
+    region: json['region'] as String?,
+    city: json['city'] as String?,
   );
 }
 

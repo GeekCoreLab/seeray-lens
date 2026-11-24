@@ -19,11 +19,17 @@ public class AnalyticsFactBuilder {
     private static final Duration MAX_CLOCK_SKEW = Duration.ofHours(24);
     private final DataSource dataSource;
     private final ObjectMapper mapper;
+    private final GeoLocationResolver geoLocationResolver;
 
     @Inject
-    public AnalyticsFactBuilder(DataSource dataSource, ObjectMapper mapper) {
+    public AnalyticsFactBuilder(DataSource dataSource, ObjectMapper mapper, GeoLocationResolver geoLocationResolver) {
         this.dataSource = dataSource;
         this.mapper = mapper;
+        this.geoLocationResolver = geoLocationResolver;
+    }
+
+    public AnalyticsFactBuilder(DataSource dataSource, ObjectMapper mapper) {
+        this(dataSource, mapper, null);
     }
 
     /** Reconciles facts in a range while retaining the site's already-materialized history. */
@@ -61,6 +67,7 @@ public class AnalyticsFactBuilder {
                     .toList();
             if (affected.isEmpty()) return;
 
+            backfillMissingLocations(affected, from, to);
             deleteOverlappingSessions(c, siteId, from, to);
             Map<String, UUID> visitorIds = ensureVisitors(c, siteId, affected);
             insertSessions(c, siteId, affected, visitorIds, from, to);
@@ -70,6 +77,38 @@ public class AnalyticsFactBuilder {
             refreshIdentityDays(c, siteId, zone.getId(), visitorIds.values());
         } catch (SQLException e) {
             throw new IllegalStateException("Could not rebuild analytics facts", e);
+        }
+    }
+
+    private void backfillMissingLocations(Collection<VisitorAcc> affected, Instant from, Instant to) {
+        if (geoLocationResolver == null) return;
+        Set<String> ipsToLookup = new LinkedHashSet<>();
+        for (VisitorAcc v : affected) {
+            for (SessionAcc s : v.sessions) {
+                if (!s.startedAt.isBefore(to) || s.lastActivity.isBefore(from)) continue;
+                if (s.countryCode == null && s.clientIp != null && !s.clientIp.isBlank()) {
+                    ipsToLookup.add(s.clientIp);
+                }
+            }
+        }
+        if (ipsToLookup.isEmpty()) return;
+        Map<String, GeoLocationResolver.Location> resolved = geoLocationResolver.resolveByIps(ipsToLookup);
+        if (resolved.isEmpty()) return;
+        for (VisitorAcc v : affected) {
+            for (SessionAcc s : v.sessions) {
+                if (!s.startedAt.isBefore(to) || s.lastActivity.isBefore(from)) continue;
+                if (s.countryCode == null && s.clientIp != null) {
+                    GeoLocationResolver.Location loc = resolved.get(s.clientIp);
+                    if (loc != null && !loc.isEmpty()) {
+                        s.countryCode = loc.countryCode();
+                        s.continentCode = loc.continentCode();
+                        s.regionCode = loc.regionCode();
+                        s.region = loc.region();
+                        s.city = loc.city();
+                        s.geoTimezone = loc.timezone();
+                    }
+                }
+            }
         }
     }
 

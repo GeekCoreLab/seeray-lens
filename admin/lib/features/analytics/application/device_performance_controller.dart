@@ -48,6 +48,9 @@ class VisitorDevicePerformance {
     required this.jsHeapUsedMb,
     required this.jsHeapLimitMb,
     required this.frameRateFps,
+    this.countryCode,
+    this.region,
+    this.city,
   });
 
   final String visitorId;
@@ -71,6 +74,9 @@ class VisitorDevicePerformance {
   final double? jsHeapUsedMb;
   final double? jsHeapLimitMb;
   final int? frameRateFps;
+  final String? countryCode;
+  final String? region;
+  final String? city;
 
   factory VisitorDevicePerformance.fromJson(Map<String, dynamic> json) {
     final rawLastSeen = json['lastSeenAt'] as String?;
@@ -99,6 +105,9 @@ class VisitorDevicePerformance {
       jsHeapUsedMb: (json['jsHeapUsedMb'] as num?)?.toDouble(),
       jsHeapLimitMb: (json['jsHeapLimitMb'] as num?)?.toDouble(),
       frameRateFps: (json['frameRateFps'] as num?)?.toInt(),
+      countryCode: json['countryCode'] as String?,
+      region: json['region'] as String?,
+      city: json['city'] as String?,
     );
   }
 }

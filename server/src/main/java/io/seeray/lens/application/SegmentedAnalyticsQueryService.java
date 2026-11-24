@@ -25,14 +25,20 @@ public class SegmentedAnalyticsQueryService {
     private final SiteService sites;
     private final SegmentService segments;
     private final FingerprintRiskService fingerprintRisk;
+    private final GeoLocationResolver geoLocationResolver;
 
     @Inject
     public SegmentedAnalyticsQueryService(
-            DataSource dataSource, SiteService sites, SegmentService segments, FingerprintRiskService fingerprintRisk) {
+            DataSource dataSource,
+            SiteService sites,
+            SegmentService segments,
+            FingerprintRiskService fingerprintRisk,
+            GeoLocationResolver geoLocationResolver) {
         this.dataSource = dataSource;
         this.sites = sites;
         this.segments = segments;
         this.fingerprintRisk = fingerprintRisk;
+        this.geoLocationResolver = geoLocationResolver;
     }
 
     public AnalyticsQueryService.Overview overview(UUID siteId, AnalyticsQueryService.Range range, UUID segmentId) {
@@ -570,7 +576,8 @@ public class SegmentedAnalyticsQueryService {
                 + "duration_ms,is_bounce,visitor_type,"
                 + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='ja4' order by o.observed_at desc limit 1),"
                 + "(select o.fingerprint_key from fingerprint_observation o join site fs on fs.id=o.site_id and fs.fingerprint_risk_enabled where o.site_id=matching_sessions.site_id and o.client_visitor_id=matching_sessions.client_visitor_id and o.client_session_id=matching_sessions.client_session_id and o.fingerprint_type='browser' order by o.observed_at desc limit 1),"
-                + "performance_score,performance_tier,hardware_concurrency,device_memory_gb,connection_type,page_load_ms,frame_rate_fps"
+                + "performance_score,performance_tier,hardware_concurrency,device_memory_gb,connection_type,page_load_ms,frame_rate_fps,"
+                + "country_code,region_name,city"
                 + " from matching_sessions order by started_at desc limit ?";
         List<VisitorLogRow> rows = list(
                 context,
@@ -603,16 +610,20 @@ public class SegmentedAnalyticsQueryService {
                                 nullableDouble(row, 18),
                                 row.getString(19),
                                 nullableInt(row, 20),
-                                nullableInt(row, 21)),
+                                nullableInt(row, 21),
+                                row.getString(22),
+                                row.getString(23),
+                                row.getString(24)),
                         row.getString(13),
                         row.getString(14),
                         row.getString(1) + "|" + row.getString(2)));
         Map<String, VisitorAssociationGroups.Labels> groups = VisitorAssociationGroups.assign(rows.stream()
                 .map(row -> new VisitorAssociationGroups.Signal(row.recordKey(), row.tlsKey(), row.browserKey()))
                 .toList());
-        return rows.stream()
+        List<AnalyticsQueryService.VisitorLog> labeled = rows.stream()
                 .map(row -> row.entry().withFingerprintGroups(groups.get(row.recordKey())))
                 .toList();
+        return AnalyticsQueryService.enrichVisitorLogLocations(labeled, geoLocationResolver);
     }
 
     public AnalyticsQueryService.VisitorProfile visitorProfile(
@@ -740,7 +751,7 @@ public class SegmentedAnalyticsQueryService {
                 totals[2],
                 totals[3],
                 totals[0] == 0 ? 0 : totals[4],
-                List.copyOf(sessions),
+                enrichSessions(sessions),
                 hasMoreSessions,
                 nextSessionsCursor,
                 List.copyOf(actions),
@@ -851,7 +862,7 @@ public class SegmentedAnalyticsQueryService {
         List<AnalyticsQueryService.VisitorProfileAction> actions =
                 actionRows.stream().map(VisitorProfileActionCursor::action).toList();
         return new AnalyticsQueryService.VisitorProfileHistoryPage(
-                List.copyOf(sessions), nextSessionsCursor, List.copyOf(actions), nextActionsCursor);
+                enrichSessions(sessions), nextSessionsCursor, List.copyOf(actions), nextActionsCursor);
     }
 
     private boolean visitorExists(UUID siteId, String visitorId) {
@@ -1131,12 +1142,14 @@ public class SegmentedAnalyticsQueryService {
                 + "representative_session as (select distinct on (identity_key) identity_key,client_visitor_id,client_ip,"
                 + "browser,operating_system,device_type,performance_score,performance_tier,hardware_concurrency,"
                 + "device_memory_gb,connection_type,connection_downlink_mbps,connection_rtt_ms,save_data,ttfb_ms,"
-                + "dom_interactive_ms,page_load_ms,js_heap_used_mb,js_heap_limit_mb,frame_rate_fps "
+                + "dom_interactive_ms,page_load_ms,js_heap_used_mb,js_heap_limit_mb,frame_rate_fps,"
+                + "country_code,region_name,city "
                 + "from matching_sessions order by identity_key,(performance_score is not null) desc,last_activity_at desc,id desc) "
                 + "select r.client_visitor_id,r.client_ip,vs.last_seen_at,vs.sessions,r.browser,r.operating_system,"
                 + "r.device_type,r.performance_score,r.performance_tier,r.hardware_concurrency,r.device_memory_gb,"
                 + "r.connection_type,r.connection_downlink_mbps,r.connection_rtt_ms,r.save_data,r.ttfb_ms,"
-                + "r.dom_interactive_ms,r.page_load_ms,r.js_heap_used_mb,r.js_heap_limit_mb,r.frame_rate_fps "
+                + "r.dom_interactive_ms,r.page_load_ms,r.js_heap_used_mb,r.js_heap_limit_mb,r.frame_rate_fps,"
+                + "r.country_code,r.region_name,r.city "
                 + "from visitor_stats vs join representative_session r using(identity_key) "
                 + "order by vs.last_seen_at desc,r.client_visitor_id asc limit ?";
         List<VisitorDevicePerformance> visitors = list(
@@ -1164,7 +1177,11 @@ public class SegmentedAnalyticsQueryService {
                         nullableInt(row, 18),
                         nullableDouble(row, 19),
                         nullableDouble(row, 20),
-                        nullableInt(row, 21)));
+                        nullableInt(row, 21),
+                        row.getString(22),
+                        row.getString(23),
+                        row.getString(24)));
+        visitors = enrichDevicePerformanceVisitors(visitors);
 
         return new DevicePerformanceReport(
                 summary.totalSessions(),
@@ -1323,6 +1340,127 @@ public class SegmentedAnalyticsQueryService {
                     row.getLong(8),
                     row.getLong(9));
         });
+    }
+
+    private List<AnalyticsQueryService.VisitorProfileSession> enrichSessions(
+            List<AnalyticsQueryService.VisitorProfileSession> sessions) {
+        if (geoLocationResolver == null || sessions.isEmpty()) return List.copyOf(sessions);
+        Set<String> missingIps = new LinkedHashSet<>();
+        for (AnalyticsQueryService.VisitorProfileSession session : sessions) {
+            if (session.countryCode() == null
+                    && session.region() == null
+                    && session.city() == null
+                    && session.ipAddress() != null
+                    && !session.ipAddress().isBlank()) {
+                missingIps.add(session.ipAddress());
+            }
+        }
+        if (missingIps.isEmpty()) return List.copyOf(sessions);
+        Map<String, GeoLocationResolver.Location> resolved = geoLocationResolver.resolveByIps(missingIps);
+        if (resolved.isEmpty()) return List.copyOf(sessions);
+        return sessions.stream()
+                .map(session -> {
+                    if (session.countryCode() != null
+                            || session.region() != null
+                            || session.city() != null
+                            || session.ipAddress() == null) {
+                        return session;
+                    }
+                    GeoLocationResolver.Location loc = resolved.get(session.ipAddress());
+                    if (loc == null || loc.isEmpty()) return session;
+                    return new AnalyticsQueryService.VisitorProfileSession(
+                            session.sessionId(),
+                            session.startedAt(),
+                            session.lastActivityAt(),
+                            session.entryPage(),
+                            session.exitPage(),
+                            session.pageViews(),
+                            session.events(),
+                            session.durationMs(),
+                            session.bounce(),
+                            session.visitorType(),
+                            session.browser(),
+                            session.operatingSystem(),
+                            session.deviceType(),
+                            session.language(),
+                            loc.countryCode(),
+                            loc.region(),
+                            loc.city(),
+                            session.referrerHost(),
+                            session.campaignSource(),
+                            session.campaignMedium(),
+                            session.campaignName(),
+                            session.ipAddress(),
+                            session.performanceScore(),
+                            session.performanceTier(),
+                            session.hardwareConcurrency(),
+                            session.deviceMemoryGb(),
+                            session.connectionType(),
+                            session.connectionDownlinkMbps(),
+                            session.connectionRttMs(),
+                            session.saveData(),
+                            session.ttfbMs(),
+                            session.domInteractiveMs(),
+                            session.pageLoadMs(),
+                            session.jsHeapUsedMb(),
+                            session.jsHeapLimitMb(),
+                            session.frameRateFps());
+                })
+                .toList();
+    }
+
+    private List<VisitorDevicePerformance> enrichDevicePerformanceVisitors(List<VisitorDevicePerformance> visitors) {
+        if (geoLocationResolver == null || visitors.isEmpty()) return List.copyOf(visitors);
+        Set<String> missingIps = new LinkedHashSet<>();
+        for (VisitorDevicePerformance visitor : visitors) {
+            if (visitor.countryCode() == null
+                    && visitor.region() == null
+                    && visitor.city() == null
+                    && visitor.ipAddress() != null
+                    && !visitor.ipAddress().isBlank()) {
+                missingIps.add(visitor.ipAddress());
+            }
+        }
+        if (missingIps.isEmpty()) return List.copyOf(visitors);
+        Map<String, GeoLocationResolver.Location> resolved = geoLocationResolver.resolveByIps(missingIps);
+        if (resolved.isEmpty()) return List.copyOf(visitors);
+        return visitors.stream()
+                .map(visitor -> {
+                    if (visitor.countryCode() != null
+                            || visitor.region() != null
+                            || visitor.city() != null
+                            || visitor.ipAddress() == null) {
+                        return visitor;
+                    }
+                    GeoLocationResolver.Location loc = resolved.get(visitor.ipAddress());
+                    if (loc == null || loc.isEmpty()) return visitor;
+                    return new VisitorDevicePerformance(
+                            visitor.visitorId(),
+                            visitor.ipAddress(),
+                            visitor.lastSeenAt(),
+                            visitor.sessions(),
+                            visitor.browser(),
+                            visitor.operatingSystem(),
+                            visitor.deviceType(),
+                            visitor.performanceScore(),
+                            visitor.performanceTier(),
+                            visitor.hardwareConcurrency(),
+                            visitor.deviceMemoryGb(),
+                            visitor.connectionType(),
+                            visitor.connectionDownlinkMbps(),
+                            visitor.connectionRttMs(),
+                            visitor.saveData(),
+                            visitor.ttfbMs(),
+                            visitor.domInteractiveMs(),
+                            visitor.pageLoadMs(),
+                            visitor.jsHeapUsedMb(),
+                            visitor.jsHeapLimitMb(),
+                            visitor.frameRateFps(),
+                            loc.countryCode(),
+                            loc.region(),
+                            loc.city());
+                })
+                .toList();
     }
 
     private static List<String> nonEmpty(String... values) {
@@ -1579,7 +1717,10 @@ public class SegmentedAnalyticsQueryService {
             Integer pageLoadMs,
             Double jsHeapUsedMb,
             Double jsHeapLimitMb,
-            Integer frameRateFps) {}
+            Integer frameRateFps,
+            String countryCode,
+            String region,
+            String city) {}
 
     @RegisterForReflection
     public record DevicePerformanceReport(
