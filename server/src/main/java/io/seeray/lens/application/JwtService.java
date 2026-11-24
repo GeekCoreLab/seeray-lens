@@ -25,8 +25,8 @@ public class JwtService {
         long iat = Instant.now().getEpochSecond();
         long exp = iat + lifetime;
         String head = b64("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
-        String payload = b64("{\"sub\":\"" + id + "\",\"iss\":\"" + issuer + "\",\"av\":"
-                + authVersion + ",\"iat\":" + iat + ",\"exp\":" + exp + "}");
+        String payload = b64("{\"sub\":\"" + id + "\",\"iss\":\"" + issuer + "\",\"av\":" + authVersion + ",\"iat\":"
+                + iat + ",\"exp\":" + exp + "}");
         return head + "." + payload + "." + sign(head + "." + payload);
     }
 

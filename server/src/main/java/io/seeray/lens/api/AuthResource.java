@@ -1,8 +1,8 @@
 package io.seeray.lens.api;
 
+import io.quarkus.security.Authenticated;
 import io.seeray.lens.application.AuthService;
 import io.seeray.lens.application.WorkspaceAccess;
-import io.quarkus.security.Authenticated;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import jakarta.ws.rs.*;
@@ -62,8 +62,9 @@ public class AuthResource {
     @Path("/change-password")
     @Authenticated
     public TokenResponse changePassword(@Valid ChangePasswordRequest request) {
-        if (request == null) throw new io.seeray.lens.domain.common.ControlPlaneException(
-                400, "INVALID_PASSWORD", "A new password is required");
+        if (request == null)
+            throw new io.seeray.lens.domain.common.ControlPlaneException(
+                    400, "INVALID_PASSWORD", "A new password is required");
         return tokens(auth.changeTemporaryPassword(access.userId(), request.newPassword()));
     }
 

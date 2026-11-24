@@ -26,7 +26,9 @@ public class AuthService {
 
     @Inject
     public AuthService(
-            JwtService jwt, WorkspaceInvitationService invitations, AuthActivityRecorder activity,
+            JwtService jwt,
+            WorkspaceInvitationService invitations,
+            AuthActivityRecorder activity,
             EntityManager entityManager) {
         this.jwt = jwt;
         this.invitations = invitations;
@@ -180,7 +182,9 @@ public class AuthService {
     }
 
     private void lockUserAdministration() {
-        entityManager.createNativeQuery("LOCK TABLE app_user IN SHARE ROW EXCLUSIVE MODE").executeUpdate();
+        entityManager
+                .createNativeQuery("LOCK TABLE app_user IN SHARE ROW EXCLUSIVE MODE")
+                .executeUpdate();
     }
 
     static String hash(String value) {
@@ -200,5 +204,6 @@ public class AuthService {
 
     public record Tokens(String accessToken, String refreshToken) {}
 
-    public record CurrentUser(UUID id, String email, String displayName, boolean systemAdmin, boolean mustChangePassword) {}
+    public record CurrentUser(
+            UUID id, String email, String displayName, boolean systemAdmin, boolean mustChangePassword) {}
 }

@@ -57,7 +57,9 @@ public class SystemAdminResource {
     @POST
     @Path("/sites")
     public Response createSite(@NotNull @Valid SystemAdminService.CreateSite request) {
-        return Response.status(Response.Status.CREATED).entity(admin.createSite(request)).build();
+        return Response.status(Response.Status.CREATED)
+                .entity(admin.createSite(request))
+                .build();
     }
 
     @PATCH

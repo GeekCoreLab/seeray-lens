@@ -35,8 +35,8 @@ public class RawAnalyticsRetentionService {
                 LocalDate aggregateCutoff = LocalDate.now(policy.zone).minusDays(policy.aggregateRetentionDays);
                 rawEvents += deleteRawEvents(connection, policy.siteId, rawCutoff);
                 clearExpiredClientIps(connection, policy.siteId, clientIpCutoff);
-                deleteFingerprintObservations(connection, policy.siteId,
-                        now.minus(Duration.ofDays(policy.fingerprintRetentionDays)));
+                deleteFingerprintObservations(
+                        connection, policy.siteId, now.minus(Duration.ofDays(policy.fingerprintRetentionDays)));
                 aggregateRows += deleteDatedAggregates(connection, policy.siteId, aggregateCutoff);
                 Instant aggregateInstantCutoff =
                         aggregateCutoff.atStartOfDay(policy.zone).toInstant();
@@ -58,7 +58,11 @@ public class RawAnalyticsRetentionService {
                 ResultSet rows = statement.executeQuery()) {
             while (rows.next())
                 result.add(new Policy(
-                        rows.getObject(1, UUID.class), ZoneId.of(rows.getString(2)), rows.getInt(3), rows.getInt(4), rows.getInt(5)));
+                        rows.getObject(1, UUID.class),
+                        ZoneId.of(rows.getString(2)),
+                        rows.getInt(3),
+                        rows.getInt(4),
+                        rows.getInt(5)));
         }
         return result;
     }
@@ -175,8 +179,8 @@ public class RawAnalyticsRetentionService {
         }
     }
 
-    private record Policy(UUID siteId, ZoneId zone, int rawRetentionDays, int aggregateRetentionDays,
-                          int fingerprintRetentionDays) {}
+    private record Policy(
+            UUID siteId, ZoneId zone, int rawRetentionDays, int aggregateRetentionDays, int fingerprintRetentionDays) {}
 
     @FunctionalInterface
     private interface Binder {

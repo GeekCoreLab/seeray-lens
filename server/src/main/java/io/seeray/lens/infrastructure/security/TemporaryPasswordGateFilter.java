@@ -23,8 +23,7 @@ public class TemporaryPasswordGateFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext request) throws IOException {
-        if (identity.isAnonymous()
-                || !Boolean.TRUE.equals(identity.getAttribute("mustChangePassword"))) return;
+        if (identity.isAnonymous() || !Boolean.TRUE.equals(identity.getAttribute("mustChangePassword"))) return;
         String path = request.getUriInfo().getPath();
         if (path.equals("api/v1/auth/me")
                 || path.equals("api/v1/auth/change-password")

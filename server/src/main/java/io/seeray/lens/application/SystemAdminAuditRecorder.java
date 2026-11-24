@@ -19,7 +19,8 @@ public class SystemAdminAuditRecorder {
         String sql = userAction
                 ? "INSERT INTO system_admin_audit (id, actor_user_id, target_user_id, site_id, action) VALUES (:id, :actor, :target, NULL, :action)"
                 : "INSERT INTO system_admin_audit (id, actor_user_id, target_user_id, site_id, action) VALUES (:id, :actor, NULL, :site, :action)";
-        var query = entityManager.createNativeQuery(sql)
+        var query = entityManager
+                .createNativeQuery(sql)
                 .setParameter("id", UUID.randomUUID())
                 .setParameter("actor", actorId)
                 .setParameter("action", action);

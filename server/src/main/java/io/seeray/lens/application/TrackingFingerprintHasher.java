@@ -18,7 +18,9 @@ public final class TrackingFingerprintHasher {
             digest.update((byte) 0);
             digest.update(String.valueOf(fingerprint.algorithmVersion()).getBytes(StandardCharsets.UTF_8));
             digest.update((byte) 0);
-            return HexFormat.of().formatHex(digest.digest(fingerprint.signalHash().toLowerCase().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(
+                            digest.digest(fingerprint.signalHash().toLowerCase().getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is not available", impossible);
         }

@@ -30,10 +30,10 @@ public class SystemAdminAccess {
     }
 
     public boolean isSystemAdmin() {
-        if (identity.isAnonymous() || identity.getAttribute(ApiTokenAuthenticator.ATTRIBUTE_TYPE) != null)
-            return false;
+        if (identity.isAnonymous() || identity.getAttribute(ApiTokenAuthenticator.ATTRIBUTE_TYPE) != null) return false;
         try {
-            AppUser user = AppUser.findById(UUID.fromString(identity.getPrincipal().getName()));
+            AppUser user =
+                    AppUser.findById(UUID.fromString(identity.getPrincipal().getName()));
             return user != null && user.status == UserStatus.ACTIVE && user.systemAdmin;
         } catch (RuntimeException ignored) {
             return false;
